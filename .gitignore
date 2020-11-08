@@ -7,3 +7,6 @@ thinpad_top.runs/
 /.lint/
 /.Xil
 /.Xilinx
+vivado*.str
+vivado*.pid
+vivado*.zip
