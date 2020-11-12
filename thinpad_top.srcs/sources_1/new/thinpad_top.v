@@ -129,7 +129,7 @@ wire write_reg_buf;
 wire[`RegBus] rd_data_i;
 
 // 连接CPU和IO访存模块
-wire io_oen, io_wen;
+wire io_oen, io_wen, io_byte_en;
 wire[`RegBus] ram_data_o;
 wire[`RegBus] ram_data_i;
 wire[`RegBus] address;
@@ -157,7 +157,7 @@ io_control _io_control(
     .rst(rst),
     .oen(io_oen),
     .wen(io_wen),
-    .byte_en(mem_byte_en),
+    .byte_en(io_byte_en),
 
     .data_in(ram_data_o),
     .data_out(ram_data_i),
@@ -261,12 +261,14 @@ cpu _cpu(
     .ram_data_i(ram_data_i),
     .mem_read(mem_read),
     .mem_write(mem_write),
+    .mem_byte_en(mem_byte_en),
     
     .rs1_data_i(rs1_data_o),
     .rs2_data_i(rs2_data_o),
 
     .io_oen(io_oen),
     .io_wen(io_wen),
+    .io_byte_en(io_byte_en),
     .ram_data_o(ram_data_o),
 
     .address(address),

@@ -58,9 +58,8 @@ assign done = (state == STATE_DONE);
 
 // 地址仲裁
 wire ram_or_uart = (address >= 32'h8000_0000);
-wire[`RAMAddrBus] ram_addr = address[21:2];
 wire use_ext_ram_bus = address[22];  // 为 1 时选择ext_ram
-wire[1:0] ram_byte_select = address[1:0];
+
 
 // RAM控制信号
 reg oe_sram_n, we_sram_n;
@@ -68,18 +67,18 @@ reg oe_sram_n, we_sram_n;
 // ExtRAM控制信号
 wire ext_oe_sram_n = (use_ext_ram_bus && ram_or_uart) ? oe_sram_n : 1'b1;
 wire ext_we_sram_n = (use_ext_ram_bus && ram_or_uart) ? we_sram_n : 1'b1;
-wire[31:0] data_ext_ram_out; // 从内存读到串口
+wire[`RegBus] data_ext_ram_out; // 从内存读到串口
 wire ext_ram_done;
 
 // BaseRAM控制信号
 wire base_oe_sram_n = (~use_ext_ram_bus && ram_or_uart) ? oe_sram_n : 1'b1;
 wire base_we_sram_n = (~use_ext_ram_bus && ram_or_uart) ? we_sram_n : 1'b1;
-wire[31:0] data_base_ram_out; // 从内存读到串口
+wire[`RegBus] data_base_ram_out; // 从内存读到串口
 wire base_ram_done;
 
 // 两个RAM结合起来
 wire sram_done = ext_ram_done | base_ram_done; // 内存读写完成
-wire data_sram_out = use_ext_ram_bus ? data_ext_ram_out : data_base_ram_out;
+wire[`RegBus] data_sram_out = use_ext_ram_bus ? data_ext_ram_out : data_base_ram_out;
 
 // 串口控制信号
 reg oe_uart_n, we_uart_n;
@@ -88,8 +87,8 @@ wire uart_done;
 
 // 总线控制逻辑，三态端口
 reg data_z;
-reg[31:0] data_to_reg;
-assign base_ram_data_wire = (~data_z && ~use_ext_ram_bus && ram_or_uart) ? data_to_reg : 32'bz;
+reg[`RegBus] data_to_reg;
+assign base_ram_data_wire = (~data_z && (~use_ext_ram_bus && ram_or_uart) || ~ram_or_uart) ? data_to_reg : 32'bz;
 assign ext_ram_data_wire  = (~data_z &&  use_ext_ram_bus && ram_or_uart) ? data_to_reg : 32'bz;
 
 uart_io _uart_io(
@@ -172,10 +171,12 @@ always @(posedge clk or posedge rst) begin
                     end else if (address == 32'h1000_0000) begin
                         state <= STATE_START_UART_READ;
                     end else if (address == 32'h1000_0005) begin // 读串口状态位
-                        data_out <= {24'h00_0000, 2'b00, 1'b1, 4'b0000, 1'b1};
+                        //data_out <= {24'h00_0000, 2'b00, 1'b1, 4'b0000, 1'b1};
+                        data_out <= {24'h00_0000, 2'b00, uart_tbre&uart_tsre, 4'b0000, uart_dataready};
                         state <= STATE_DONE;
                     end else begin
                         // 非法地址
+                        state <= STATE_DONE;
                     end
                 end
                 else if (~wen) begin //写数据
@@ -185,16 +186,15 @@ always @(posedge clk or posedge rst) begin
                         state <= STATE_START_UART_WRITE;
                     end else begin
                         // 非法地址 或 不允许写串口状态位
+                        state <= STATE_DONE;
                     end
                 end
             end
             //读串口
             STATE_START_UART_READ: begin
-                if (uart_dataready) begin
-                    data_z <= 1'b1;
-                    oe_uart_n <= 1'b0;
-                    state <= STATE_FINISH_UART_READ;
-                end
+                data_z <= 1'b1;
+                oe_uart_n <= 1'b0;
+                state <= STATE_FINISH_UART_READ;
             end
             STATE_FINISH_UART_READ: begin
                 if (uart_done) begin

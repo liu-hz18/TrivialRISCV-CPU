@@ -22,6 +22,10 @@
 `define ALU_OP_XOR 5'b00101
 `define ALU_OP_SLL 5'b00110
 `define ALU_OP_SRL 5'b00111
+`define ALU_OP_JALR 5'b01000
+`define ALU_OP_MIN 5'b01001
+`define ALU_OP_CTZ 5'b01010
+`define ALU_OP_SBCLR 5'b01011
 
 // 存储器
 `define AddrBus 20:0

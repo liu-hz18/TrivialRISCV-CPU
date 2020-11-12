@@ -14,12 +14,14 @@ module cpu(
     input wire[`RegBus] ram_data_i,
     input wire mem_read,
     input wire mem_write,
+    input wire mem_byte_en,
 
     input wire[`RegBus] rs1_data_i,
     input wire[`RegBus] rs2_data_i,
 
     output reg io_oen,
     output reg io_wen,
+    output reg io_byte_en,
     output reg[`RegBus] ram_data_o,
     
     output wire[`RegBus] address,
@@ -41,12 +43,12 @@ localparam STAGE_WB = 3'b110;
 
 reg[2:0] state;
 
-assign address = (state == STAGE_IF_BEGIN || state == STAGE_IF_FINISH) ? pc[21:2] : ex_result_i[21:2]; // SRAM地址
+assign address = (state == STAGE_IF_BEGIN || state == STAGE_IF_FINISH) ? pc : ex_result_i; // SRAM地址
 assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
 
 always @(posedge clk) begin
     if (rst) begin
-        {io_oen, io_wen} <= 2'b11;
+        {io_oen, io_wen, io_byte_en} <= 3'b110;
         pc <= `PC_INIT_ADDR;
         pc_now <= `PC_INIT_ADDR;
         inst <= `ZERO_WORD;
@@ -62,7 +64,7 @@ always @(posedge clk) begin
         end
         STAGE_IF_FINISH: begin
             if (done) begin // busy-waiting for instruction
-                {io_oen, io_wen} <= 2'b11;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
                 inst <= ram_data_i; // 取出指令
                 state <= STAGE_ID;            
             end
@@ -76,10 +78,16 @@ always @(posedge clk) begin
         STAGE_MEM_BEGIN: begin
             if (mem_read == 1'b1) begin
                 io_oen <= 1'b0;
+                if (mem_byte_en) begin
+                    io_byte_en <= 1'b1;
+                end
                 state <= STAGE_MEM_FINISH;
             end else if (mem_write == 1'b1) begin
                 io_wen <= 1'b0;
                 ram_data_o <= rs2_data_i;
+                if (mem_byte_en) begin
+                    io_byte_en <= 1'b1;
+                end
                 state <= STAGE_MEM_FINISH;
             end else begin
                 if (link_flag_i) begin
@@ -92,7 +100,7 @@ always @(posedge clk) begin
         end
         STAGE_MEM_FINISH: begin
             if (done) begin
-                {io_oen, io_wen} <= 2'b11;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
                 state <= STAGE_WB;
                 if (mem_read) begin
                     rd_data_o <= ram_data_i; // 取出读到的值
