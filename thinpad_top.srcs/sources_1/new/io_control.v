@@ -1,19 +1,22 @@
 `timescale 1ns / 1ps
+`include "defines.v"
 
 module io_control(
     input wire clk,
     input wire rst,
     input wire oen,
     input wire wen,
-    input wire ram_or_uart,
 
-    input wire[31:0] data_in,
-    output reg[31:0] data_out,
+    input wire byte_en, // lb, lw指令
+
+    input wire[`RegBus] data_in,
+    output reg[`RegBus] data_out,
     output wire done,
 
-    inout wire[31:0] base_ram_data_wire, //数据总线
+    inout wire[`RegBus] base_ram_data_wire, // BaseRAM & UART数据总线
+    inout wire[`RegBus] ext_ram_data_wire,  // ExtRAM 数据总线
 
-    input wire[19:0] address,
+    input wire[`RegBus] address,
 
     //CPLD串口控制器信号
     output wire uart_rdn,
@@ -23,27 +26,19 @@ module io_control(
     input wire uart_tsre,
 
     //BaseRAM控制信号
-    output wire[19:0] base_ram_addr,
+    output wire[`RAMAddrBus] base_ram_addr,
     output wire[3:0] base_ram_be_n,
-    output wire base_ram_ce_n,
-    output wire base_ram_oe_n,
-    output wire base_ram_we_n
+    output wire      base_ram_ce_n,
+    output wire      base_ram_oe_n,
+    output wire      base_ram_we_n,
+
+    // ExtRAM控制信号
+    output wire[`RAMAddrBus] ext_ram_addr,
+    output wire[3:0] ext_ram_be_n,
+    output wire      ext_ram_ce_n,
+    output wire      ext_ram_oe_n,
+    output wire      ext_ram_we_n
 );
-
-reg oe_uart_n, we_uart_n;
-reg[7:0] data_uart_in;
-wire[7:0] data_uart_out;
-wire uart_done;
-
-reg oe_sram_n, we_sram_n;
-reg[31:0] data_sram_in;
-wire[31:0] data_sram_out;
-wire sram_done;
-
-// 总线控制逻辑，三态端口
-reg data_z;
-reg[31:0] data_to_reg;
-assign base_ram_data_wire = (~data_z) ? data_to_reg : 32'bz;
 
 localparam STATE_IDLE              = 4'b0000;
 
@@ -61,69 +56,135 @@ localparam STATE_DONE              = 4'b1001;
 reg[3:0] state; //4 bit
 assign done = (state == STATE_DONE);
 
+// 地址仲裁
+wire ram_or_uart = (address >= 32'h8000_0000);
+wire[`RAMAddrBus] ram_addr = address[21:2];
+wire use_ext_ram_bus = address[22];  // 为 1 时选择ext_ram
+wire[1:0] ram_byte_select = address[1:0];
+
+// RAM控制信号
+reg oe_sram_n, we_sram_n;
+
+// ExtRAM控制信号
+wire ext_oe_sram_n = (use_ext_ram_bus && ram_or_uart) ? oe_sram_n : 1'b1;
+wire ext_we_sram_n = (use_ext_ram_bus && ram_or_uart) ? we_sram_n : 1'b1;
+wire[31:0] data_ext_ram_out; // 从内存读到串口
+wire ext_ram_done;
+
+// BaseRAM控制信号
+wire base_oe_sram_n = (~use_ext_ram_bus && ram_or_uart) ? oe_sram_n : 1'b1;
+wire base_we_sram_n = (~use_ext_ram_bus && ram_or_uart) ? we_sram_n : 1'b1;
+wire[31:0] data_base_ram_out; // 从内存读到串口
+wire base_ram_done;
+
+// 两个RAM结合起来
+wire sram_done = ext_ram_done | base_ram_done; // 内存读写完成
+wire data_sram_out = use_ext_ram_bus ? data_ext_ram_out : data_base_ram_out;
+
+// 串口控制信号
+reg oe_uart_n, we_uart_n;
+wire[7:0] data_uart_out;
+wire uart_done;
+
+// 总线控制逻辑，三态端口
+reg data_z;
+reg[31:0] data_to_reg;
+assign base_ram_data_wire = (~data_z && ~use_ext_ram_bus && ram_or_uart) ? data_to_reg : 32'bz;
+assign ext_ram_data_wire  = (~data_z &&  use_ext_ram_bus && ram_or_uart) ? data_to_reg : 32'bz;
+
 uart_io _uart_io(
     .clk(clk),
     .rst(rst),
     .oen(oe_uart_n),
     .wen(we_uart_n),
-    .data_in(data_uart_in),
+
     .data_out(data_uart_out),
     .done(uart_done),
 
     .uart_data_wire_in(base_ram_data_wire),
 
-    .uart_rdn(uart_rdn), 
-    .uart_wrn(uart_wrn), 
+    .uart_rdn(uart_rdn),
+    .uart_wrn(uart_wrn),
     .uart_dataready(uart_dataready),
-    .uart_tbre(uart_tbre), 
+    .uart_tbre(uart_tbre),
     .uart_tsre(uart_tsre)
 );
 
-sram_io _sram_io(
+// BaseRAN模块
+sram_io _base_ram_io(
     .clk(clk),
     .rst(rst),
-    .oen(oe_sram_n),
-    .wen(we_sram_n),
-    .data_in(data_sram_in),
-    .data_out(data_sram_out),
-    .done(sram_done),
+    .oen(base_oe_sram_n),
+    .wen(base_we_sram_n),
+    .byte_en(byte_en),
 
-    .base_ram_data_wire_in(base_ram_data_wire),
+    .data_out(data_base_ram_out),
+    .done(base_ram_done),
+
+    .ram_data_wire_in(base_ram_data_wire),
 
     .address(address),
-    .base_ram_addr(base_ram_addr),
-    .base_ram_be_n(), //字节使能 输出暂且不用，悬空
-    .base_ram_ce_n(base_ram_ce_n),
-    .base_ram_oe_n(base_ram_oe_n),
-    .base_ram_we_n(base_ram_we_n)
+    .ram_addr(base_ram_addr),
+    .ram_be_n(base_ram_be_n), //字节使能
+    .ram_ce_n(base_ram_ce_n),
+    .ram_oe_n(base_ram_oe_n),
+    .ram_we_n(base_ram_we_n)
 );
 
-assign base_ram_be_n = 4'b0000;
+
+// ExtRAM模块
+sram_io _ext_ram_io(
+    .clk(clk),
+    .rst(rst),
+    .oen(ext_oe_sram_n),
+    .wen(ext_we_sram_n),
+    .byte_en(byte_en),
+
+    .data_out(data_ext_ram_out),
+    .done(ext_ram_done),
+
+    .ram_data_wire_in(ext_ram_data_wire),
+
+    .address(address),
+    .ram_addr(ext_ram_addr),
+    .ram_be_n(ext_ram_be_n), //字节使能
+    .ram_ce_n(ext_ram_ce_n),
+    .ram_oe_n(ext_ram_oe_n),
+    .ram_we_n(ext_ram_we_n)
+);
+
 
 always @(posedge clk or posedge rst) begin
     if (rst) begin
         {oe_uart_n, we_uart_n} <= 2'b11;
         {oe_sram_n, we_sram_n} <= 2'b11;
         data_z <= 1'b1;
+        data_to_reg <= `ZERO_WORD;
+        data_out <= `ZERO_WORD;
         state <= STATE_IDLE;
     end
     else begin
         case (state)
             STATE_IDLE: begin
                 if(~oen) begin //读数据
-                    if (ram_or_uart) begin// 读RAM
+                    if (ram_or_uart) begin // 读RAM
                         state <= STATE_START_MEM_READ;
-                    end
-                    else begin
+                    end else if (address == 32'h1000_0000) begin
                         state <= STATE_START_UART_READ;
+                    end else if (address == 32'h1000_0005) begin // 读串口状态位
+                        data_out <= {24'h00_0000, 2'b00, 1'b1, 4'b0000, 1'b1};
+                        state <= STATE_DONE;
+                    end else begin
+                        // 非法地址
                     end
                 end
                 else if (~wen) begin //写数据
                     if (ram_or_uart) begin//写RAM
                         state <= STATE_START_MEM_WRITE;
-                    end
-                    else begin
+                    end else if (address == 32'h1000_0000) begin
                         state <= STATE_START_UART_WRITE;
+                    end else begin
+                        // 非法地址 或 不允许写串口状态位
                     end
                 end
             end
@@ -136,7 +197,7 @@ always @(posedge clk or posedge rst) begin
                 end
             end
             STATE_FINISH_UART_READ: begin
-                if (uart_done) begin // 读串口有问题
+                if (uart_done) begin
                     {oe_uart_n, we_uart_n} <= 2'b11;
                     data_out <= data_uart_out;
                     state <= STATE_DONE;
@@ -173,7 +234,11 @@ always @(posedge clk or posedge rst) begin
             STATE_START_MEM_WRITE: begin
                 data_z <= 1'b0;        // 作为发送方，base_ram_data置为要输入的数据
                 we_sram_n <= 1'b0; //打开写内存
-                data_to_reg <= data_in;
+                if (byte_en) begin
+                    data_to_reg <= {24'h00_0000, data_in[7:0]} << ((address & 32'h0000_0003) << 3);
+                end else begin
+                    data_to_reg <= data_in;
+                end
                 state <= STATE_FINISH_MEM_WRITE;
             end
             STATE_FINISH_MEM_WRITE: begin
@@ -183,6 +248,7 @@ always @(posedge clk or posedge rst) begin
                     state <= STATE_DONE;
                 end
             end
+            // 结束状态
             STATE_DONE: begin
                 if(oen & wen) begin
                     {oe_uart_n, we_uart_n} <= 2'b11;

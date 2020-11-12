@@ -7,7 +7,9 @@ module cpu(
 
     input wire done,
     input wire branch_flag_i,
+    input wire link_flag_i,
     input wire write_reg,
+
     input wire[`RegBus] ex_result_i,
     input wire[`RegBus] ram_data_i,
     input wire mem_read,
@@ -16,11 +18,11 @@ module cpu(
     input wire[`RegBus] rs1_data_i,
     input wire[`RegBus] rs2_data_i,
 
-    output reg sram_or_uart,
     output reg io_oen,
     output reg io_wen,
     output reg[`RegBus] ram_data_o,
-    output wire[`RAMAddrBus] address,
+    
+    output wire[`RegBus] address,
     output wire write_reg_buf,
 
     output reg[`InstBus] inst,
@@ -45,9 +47,8 @@ assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
 always @(posedge clk) begin
     if (rst) begin
         {io_oen, io_wen} <= 2'b11;
-        sram_or_uart <= 1'b1;
-        pc <= `ZERO_WORD;
-        pc_now <= `ZERO_WORD;
+        pc <= `PC_INIT_ADDR;
+        pc_now <= `PC_INIT_ADDR;
         inst <= `ZERO_WORD;
         rd_data_o <= `ZERO_WORD;
         ram_data_o <= `ZERO_WORD;
@@ -56,7 +57,6 @@ always @(posedge clk) begin
         case (state)
         STAGE_IF_BEGIN: begin
             io_oen <= 1'b0; // 读内存模式
-            sram_or_uart <= 1'b1;
             pc_now <= pc;
             state <= STAGE_IF_FINISH;
         end
@@ -75,16 +75,18 @@ always @(posedge clk) begin
         end
         STAGE_MEM_BEGIN: begin
             if (mem_read == 1'b1) begin
-                sram_or_uart <= 1'b1;
                 io_oen <= 1'b0;
                 state <= STAGE_MEM_FINISH;
             end else if (mem_write == 1'b1) begin
-                sram_or_uart <= 1'b1;
                 io_wen <= 1'b0;
                 ram_data_o <= rs2_data_i;
                 state <= STAGE_MEM_FINISH;
             end else begin
-                rd_data_o <= ex_result_i;
+                if (link_flag_i) begin
+                    rd_data_o <= pc + 4;
+                end else begin
+                    rd_data_o <= ex_result_i;
+                end
                 state <= STAGE_WB;
             end
         end

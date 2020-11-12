@@ -1,23 +1,24 @@
 `timescale 1ns / 1ps
+`include "defines.v"
 
 module sram_io(
     input wire clk,  //时钟输入
     input wire rst,
     input wire oen,
     input wire wen,
+    input wire byte_en,
 
-    input wire[31:0] data_in,
-    output reg[31:0] data_out,
+    output reg[`RegBus] data_out,
     output wire done,
 
-    input wire[31:0] base_ram_data_wire_in,
+    input wire[`RegBus] ram_data_wire_in,
 
-    input wire[19:0] address, //读入的地址信号
-    output reg[19:0] base_ram_addr, //BaseRAM地址
-    output reg[3:0] base_ram_be_n,  //BaseRAM字节使能，低有效。如果不使用字节使能，请保持为0
-    output reg base_ram_ce_n,       //BaseRAM片选，低有效
-    output reg base_ram_oe_n,       //BaseRAM读使能，低有效
-    output reg base_ram_we_n        //BaseRAM写使能，低有效
+    input wire[`RegBus] address, //读入的地址信号
+    output reg[`RAMAddrBus] ram_addr, //RAM地址
+    output reg[3:0] ram_be_n,       //RAM字节使能，低有效。如果不使用字节使能，请保持为0
+    output reg      ram_ce_n,       //RAM片选，低有效
+    output reg      ram_oe_n,       //RAM读使能，低有效
+    output reg      ram_we_n        //RAM写使能，低有效
 );
 
 localparam STATE_IDLE         = 3'b000;
@@ -32,50 +33,76 @@ assign done = (state == STATE_DONE);
 
 always @(posedge clk or posedge rst) begin
     if (rst) begin
-        base_ram_ce_n <= 1'b1;
-        base_ram_oe_n <= 1'b1;
-        base_ram_we_n <= 1'b1;
+        ram_ce_n <= 1'b1;
+        ram_oe_n <= 1'b1;
+        ram_we_n <= 1'b1;
+        ram_be_n <= 4'b0000;
+        ram_addr <= `ZERO_RAM_ADDR;
+        data_out <= `ZERO_WORD;
         state <= STATE_IDLE;
     end
     else begin
         case (state)
             STATE_IDLE: begin
                 if(~oen) begin
-                    base_ram_addr <= address;
+                    ram_addr <= address[21:2];
                     state <= STATE_START_READ;
                 end
                 else if (~wen) begin
-                    base_ram_addr <= address;
-                    //data_out <= data_in;
+                    ram_addr <= address[21:2];
                     state <= STATE_START_WRITE;
+                end else begin
+                    ram_addr <= `ZERO_RAM_ADDR;
                 end
             end
             STATE_START_READ: begin
-                base_ram_ce_n <= 1'b0;
-                base_ram_oe_n <= 1'b0;
+                ram_ce_n <= 1'b0;
+                ram_oe_n <= 1'b0;
+                if (byte_en) begin
+                    ram_be_n <= ~(4'b0001 << (address & 32'h00000003));
+                end else begin
+                    ram_be_n <= 4'b0000;
+                end
                 state <= STATE_FINISH_READ;
             end
             STATE_FINISH_READ: begin
-                base_ram_ce_n <= 1'b1;
-                base_ram_oe_n <= 1'b1;
-                data_out <= base_ram_data_wire_in; // 读数据直接到data_out
+                ram_ce_n <= 1'b1;
+                ram_oe_n <= 1'b1;
+                ram_be_n <= 4'b0000;
+                if (ram_be_n == 4'b1110) begin
+                    data_out <= { {24{ram_data_wire_in[7]}}, ram_data_wire_in[7:0]};
+                end else if (ram_be_n == 4'b1101) begin
+                    data_out <= { {24{ram_data_wire_in[15]}}, ram_data_wire_in[15:8]};
+                end else if (ram_be_n == 4'b1011) begin
+                    data_out <= { {24{ram_data_wire_in[23]}}, ram_data_wire_in[23:16]};
+                end else if (ram_be_n == 4'b0111) begin
+                    data_out <= { {24{ram_data_wire_in[31]}}, ram_data_wire_in[31:24]};
+                end else begin
+                    data_out <= ram_data_wire_in; // 读数据直接到data_out
+                end
                 state <= STATE_DONE;
             end
             STATE_START_WRITE:begin
-                base_ram_ce_n <= 1'b0;
-                base_ram_we_n <= 1'b0;
+                ram_ce_n <= 1'b0;
+                ram_we_n <= 1'b0;
+                if (byte_en) begin
+                    ram_be_n <= ~(4'b0001 << (address & 32'h00000003));;
+                end else begin
+                    ram_be_n <= 4'b0000;
+                end
                 state <= STATE_FINISH_WRITE;
             end
             STATE_FINISH_WRITE: begin
-                base_ram_ce_n <= 1'b1;
-                base_ram_we_n <= 1'b1;
+                ram_ce_n <= 1'b1;
+                ram_we_n <= 1'b1;
+                ram_be_n <= 4'b0000;
                 state <= STATE_DONE;
             end
             STATE_DONE:begin
                 if (oen&wen) begin
-                    base_ram_ce_n <= 1'b1;
-                    base_ram_oe_n <= 1'b1;
-                    base_ram_we_n <= 1'b1;
+                    ram_ce_n <= 1'b1;
+                    ram_oe_n <= 1'b1;
+                    ram_we_n <= 1'b1;
                     state <= STATE_IDLE;
                 end
             end

@@ -1,4 +1,5 @@
 `timescale 1ns / 1ps
+`include "defines.v"
 
 module uart_io(
     input wire clk,
@@ -6,11 +7,10 @@ module uart_io(
     input wire oen,
     input wire wen,
 
-    input wire[7:0] data_in,
-    output reg[7:0] data_out,
+    output reg[`UartDataBus] data_out,
     output wire done,
 
-    input wire[31:0] uart_data_wire_in,
+    input wire[`RegBus] uart_data_wire_in,
 
     output reg uart_rdn,
     output reg uart_wrn,

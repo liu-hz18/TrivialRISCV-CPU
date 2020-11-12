@@ -40,6 +40,15 @@ always @(*) begin
         `ALU_OP_OR: begin
             result = src_a | src_b;
         end
+        `ALU_OP_XOR: begin
+            result = src_a ^ src_b;
+        end
+        `ALU_OP_SLL: begin
+            result = src_a << src_b;
+        end
+        `ALU_OP_SRL: begin
+            result = src_a >> src_b;
+        end
         default: begin
             // do nothing
         end

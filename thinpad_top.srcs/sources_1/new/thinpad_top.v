@@ -23,7 +23,6 @@ module thinpad_top(
 
     //BaseRAM信号
     inout wire[31:0] base_ram_data,  //BaseRAM数据，低8位与CPLD串口控制器共享
-    
     output wire[19:0] base_ram_addr, //BaseRAM地址
     output wire[3:0] base_ram_be_n,  //BaseRAM字节使能，低有效。如果不使用字节使能，请保持为0
     output wire base_ram_ce_n,       //BaseRAM片选，低有效
@@ -82,12 +81,6 @@ module thinpad_top(
     output wire video_de           //行数据有效信号，用于区分消隐区
 );
 
-// disable ext ram
-assign ext_ram_be_n = 4'b0000;
-assign ext_ram_ce_n = 1'b1;
-assign ext_ram_oe_n = 1'b1;
-assign ext_ram_we_n = 1'b1;
-
 // PLL分频示例
 wire locked, clk_10M, clk_20M;
 pll_example clock_gen(
@@ -122,9 +115,11 @@ wire[`RegBus] pc_now;
 // 连接CPU和ID模块
 wire[`InstBus] inst;
 wire branch_flag;
+wire link_flag;
 wire write_reg;
 wire mem_read;
 wire mem_write;
+wire mem_byte_en;
 
 // 连接CPU和EX模块
 wire[`RegBus] ex_result;
@@ -135,10 +130,9 @@ wire[`RegBus] rd_data_i;
 
 // 连接CPU和IO访存模块
 wire io_oen, io_wen;
-wire sram_or_uart;
 wire[`RegBus] ram_data_o;
 wire[`RegBus] ram_data_i;
-wire[`RAMAddrBus] address;
+wire[`RegBus] address;
 wire done;
 
 // 连接ID模块和regfile
@@ -163,13 +157,14 @@ io_control _io_control(
     .rst(rst),
     .oen(io_oen),
     .wen(io_wen),
-    .ram_or_uart(sram_or_uart),
+    .byte_en(mem_byte_en),
 
     .data_in(ram_data_o),
     .data_out(ram_data_i),
     .done(done),
 
     .base_ram_data_wire(base_ram_data),
+    .ext_ram_data_wire(ext_ram_data),
     .address(address),
 
     .uart_rdn(uart_rdn), 
@@ -182,7 +177,13 @@ io_control _io_control(
     .base_ram_be_n(base_ram_be_n),
     .base_ram_ce_n(base_ram_ce_n),
     .base_ram_oe_n(base_ram_oe_n),
-    .base_ram_we_n(base_ram_we_n)
+    .base_ram_we_n(base_ram_we_n),
+
+    .ext_ram_addr(ext_ram_addr),
+    .ext_ram_be_n(ext_ram_be_n),
+    .ext_ram_ce_n(ext_ram_ce_n),
+    .ext_ram_oe_n(ext_ram_oe_n),
+    .ext_ram_we_n(ext_ram_we_n)
 );
 
 ctrl _id(  // 组合逻辑
@@ -200,6 +201,7 @@ ctrl _id(  // 组合逻辑
     .rs2_data_o(rs2_data_o),
 
     .branch_flag_o(branch_flag),
+    .link_flag_o(link_flag),
 
     .imm_o(imm_o),
 
@@ -212,7 +214,8 @@ ctrl _id(  // 组合逻辑
     .write_reg(write_reg),
 
     .mem_read(mem_read),
-    .mem_write(mem_write)
+    .mem_write(mem_write),
+    .mem_byte_en(mem_byte_en)
 );
 
 ex _ex(  // 组合逻辑
@@ -251,6 +254,7 @@ cpu _cpu(
     
     .done(done),
     .branch_flag_i(branch_flag),
+    .link_flag_i(link_flag),
     .write_reg(write_reg),
     
     .ex_result_i(ex_result),
@@ -261,7 +265,6 @@ cpu _cpu(
     .rs1_data_i(rs1_data_o),
     .rs2_data_i(rs2_data_o),
 
-    .sram_or_uart(sram_or_uart),
     .io_oen(io_oen),
     .io_wen(io_wen),
     .ram_data_o(ram_data_o),
