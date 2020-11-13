@@ -1,4 +1,5 @@
-`default_nettype none
+`default_nettype none //取消默认行为
+`include "defines.v"
 
 module thinpad_top(
     input wire clk_50M,           //50MHz 时钟输入
@@ -8,7 +9,7 @@ module thinpad_top(
     input wire reset_btn,         //BTN6手动复位按钮开关，带消抖电路，按下时为1
 
     input  wire[3:0]  touch_btn,  //BTN1~BTN4，按钮开关，按下时为1
-    input  wire[31:0] dip_sw,     //32位拨码开关，拨到“ON”时为1
+    input  wire[31:0] dip_sw,     //32位拨码开关，拨到"ON"时为1
     output wire[15:0] leds,       //16位LED，输出时1点亮
     output wire[7:0]  dpy0,       //数码管低位信号，包括小数点，输出1点亮
     output wire[7:0]  dpy1,       //数码管高位信号，包括小数点，输出1点亮
@@ -80,12 +81,9 @@ module thinpad_top(
     output wire video_de           //行数据有效信号，用于区分消隐区
 );
 
-/* =========== Demo code begin =========== */
-
 // PLL分频示例
 wire locked, clk_10M, clk_20M;
-pll_example clock_gen 
- (
+pll_example clock_gen(
   // Clock in ports
   .clk_in1(clk_50M),  // 外部时钟输入
   // Clock out ports
@@ -95,7 +93,7 @@ pll_example clock_gen
   .reset(reset_btn), // PLL复位输入
   .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
                      // 后级电路复位信号应当由它生成（见下）
- );
+);
 
 reg reset_of_clk10M;
 // 异步复位，同步释放，将locked信号转为后级电路的复位reset_of_clk10M
@@ -104,113 +102,182 @@ always@(posedge clk_10M or negedge locked) begin
     else        reset_of_clk10M <= 1'b0;
 end
 
-always@(posedge clk_10M or posedge reset_of_clk10M) begin
-    if(reset_of_clk10M)begin
-        // Your Code
-    end
-    else begin
-        // Your Code
-    end
-end
+// 选择时钟和复位信号
+// wire clk = clk_10M;
+// wire rst = reset_of_clk10M;
+wire clk = clk_50M; // 50M也是可以的
+wire rst = reset_btn;
 
-// 不使用内存、串口时，禁用其使能信号
-assign base_ram_ce_n = 1'b1;
-assign base_ram_oe_n = 1'b1;
-assign base_ram_we_n = 1'b1;
+// CPU内的PC模块（PC没有独立出来）
+wire[`RegBus] pc;
+wire[`RegBus] pc_now;
 
-assign ext_ram_ce_n = 1'b1;
-assign ext_ram_oe_n = 1'b1;
-assign ext_ram_we_n = 1'b1;
+// 连接CPU和ID模块
+wire[`InstBus] inst;
+wire branch_flag;
+wire link_flag;
+wire write_reg;
+wire mem_read;
+wire mem_write;
+wire mem_byte_en;
 
-assign uart_rdn = 1'b1;
-assign uart_wrn = 1'b1;
+// 连接CPU和EX模块
+wire[`RegBus] ex_result;
 
-// 数码管连接关系示意图，dpy1同理
-// p=dpy0[0] // ---a---
-// c=dpy0[1] // |     |
-// d=dpy0[2] // f     b
-// e=dpy0[3] // |     |
-// b=dpy0[4] // ---g---
-// a=dpy0[5] // |     |
-// f=dpy0[6] // e     c
-// g=dpy0[7] // |     |
-//           // ---d---  p
+// 连接CPU和regfile
+wire write_reg_buf;
+wire[`RegBus] rd_data_i;
 
-// 7段数码管译码器演示，将number用16进制显示在数码管上面
-wire[7:0] number;
-SEG7_LUT segL(.oSEG1(dpy0), .iDIG(number[3:0])); //dpy0是低位数码管
-SEG7_LUT segH(.oSEG1(dpy1), .iDIG(number[7:4])); //dpy1是高位数码管
+// 连接CPU和IO访存模块
+wire io_oen, io_wen, io_byte_en;
+wire[`RegBus] ram_data_o;
+wire[`RegBus] ram_data_i;
+wire[`RegBus] address;
+wire done;
 
-reg[15:0] led_bits;
-assign leds = led_bits;
+// 连接ID模块和regfile
+wire read_rs1;
+wire read_rs2;
+wire[`RegBus] rs1_data_i;
+wire[`RegBus] rs2_data_i;
+wire[`RegAddrBus] rs1_addr_i;
+wire[`RegAddrBus] rs2_addr_i;
+wire[`RegAddrBus] rd_addr_i;
 
-always@(posedge clock_btn or posedge reset_btn) begin
-    if(reset_btn)begin //复位按下，设置LED为初始值
-        led_bits <= 16'h1;
-    end
-    else begin //每次按下时钟按钮，LED循环左移
-        led_bits <= {led_bits[14:0],led_bits[15]};
-    end
-end
+// 连接ID和EX
+wire[1:0] alu_sel_a_o;
+wire[1:0] alu_sel_b_o;
+wire[`AluOpWidth-1:0] alu_op_o;
+wire[`RegBus] rs1_data_o;
+wire[`RegBus] rs2_data_o;
+wire[`RegBus] imm_o;
 
-//直连串口接收发送演示，从直连串口收到的数据再发送出去
-wire [7:0] ext_uart_rx;
-reg  [7:0] ext_uart_buffer, ext_uart_tx;
-wire ext_uart_ready, ext_uart_clear, ext_uart_busy;
-reg ext_uart_start, ext_uart_avai;
-    
-assign number = ext_uart_buffer;
+io_control _io_control(
+    .clk(clk),
+    .rst(rst),
+    .oen(io_oen),
+    .wen(io_wen),
+    .byte_en(io_byte_en),
 
-async_receiver #(.ClkFrequency(50000000),.Baud(9600)) //接收模块，9600无检验位
-    ext_uart_r(
-        .clk(clk_50M),                       //外部时钟信号
-        .RxD(rxd),                           //外部串行信号输入
-        .RxD_data_ready(ext_uart_ready),  //数据接收到标志
-        .RxD_clear(ext_uart_clear),       //清除接收标志
-        .RxD_data(ext_uart_rx)             //接收到的一字节数据
-    );
+    .data_in(ram_data_o),
+    .data_out(ram_data_i),
+    .done(done),
 
-assign ext_uart_clear = ext_uart_ready; //收到数据的同时，清除标志，因为数据已取到ext_uart_buffer中
-always @(posedge clk_50M) begin //接收到缓冲区ext_uart_buffer
-    if(ext_uart_ready)begin
-        ext_uart_buffer <= ext_uart_rx;
-        ext_uart_avai <= 1;
-    end else if(!ext_uart_busy && ext_uart_avai)begin 
-        ext_uart_avai <= 0;
-    end
-end
-always @(posedge clk_50M) begin //将缓冲区ext_uart_buffer发送出去
-    if(!ext_uart_busy && ext_uart_avai)begin 
-        ext_uart_tx <= ext_uart_buffer;
-        ext_uart_start <= 1;
-    end else begin 
-        ext_uart_start <= 0;
-    end
-end
+    .base_ram_data_wire(base_ram_data),
+    .ext_ram_data_wire(ext_ram_data),
+    .address(address),
 
-async_transmitter #(.ClkFrequency(50000000),.Baud(9600)) //发送模块，9600无检验位
-    ext_uart_t(
-        .clk(clk_50M),                  //外部时钟信号
-        .TxD(txd),                      //串行信号输出
-        .TxD_busy(ext_uart_busy),       //发送器忙状态指示
-        .TxD_start(ext_uart_start),    //开始发送信号
-        .TxD_data(ext_uart_tx)        //待发送的数据
-    );
+    .uart_rdn(uart_rdn), 
+    .uart_wrn(uart_wrn), 
+    .uart_dataready(uart_dataready),
+    .uart_tbre(uart_tbre), 
+    .uart_tsre(uart_tsre),
 
-//图像输出演示，分辨率800x600@75Hz，像素时钟为50MHz
-wire [11:0] hdata;
-assign video_red = hdata < 266 ? 3'b111 : 0; //红色竖条
-assign video_green = hdata < 532 && hdata >= 266 ? 3'b111 : 0; //绿色竖条
-assign video_blue = hdata >= 532 ? 2'b11 : 0; //蓝色竖条
-assign video_clk = clk_50M;
-vga #(12, 800, 856, 976, 1040, 600, 637, 643, 666, 1, 1) vga800x600at75 (
-    .clk(clk_50M), 
-    .hdata(hdata), //横坐标
-    .vdata(),      //纵坐标
-    .hsync(video_hsync),
-    .vsync(video_vsync),
-    .data_enable(video_de)
+    .base_ram_addr(base_ram_addr),
+    .base_ram_be_n(base_ram_be_n),
+    .base_ram_ce_n(base_ram_ce_n),
+    .base_ram_oe_n(base_ram_oe_n),
+    .base_ram_we_n(base_ram_we_n),
+
+    .ext_ram_addr(ext_ram_addr),
+    .ext_ram_be_n(ext_ram_be_n),
+    .ext_ram_ce_n(ext_ram_ce_n),
+    .ext_ram_oe_n(ext_ram_oe_n),
+    .ext_ram_we_n(ext_ram_we_n)
 );
-/* =========== Demo code end =========== */
+
+ctrl _id(  // 组合逻辑
+    .rst(rst),
+    .inst_i(inst),
+
+    .rs1_data_i(rs1_data_i),
+    .rs2_data_i(rs2_data_i),
+
+    .alu_sel_a_o(alu_sel_a_o),
+    .alu_sel_b_o(alu_sel_b_o),
+    .alu_op_o(alu_op_o),
+
+    .rs1_data_o(rs1_data_o),
+    .rs2_data_o(rs2_data_o),
+
+    .branch_flag_o(branch_flag),
+    .link_flag_o(link_flag),
+
+    .imm_o(imm_o),
+
+    .read_rs1(read_rs1),
+    .read_rs2(read_rs2),
+    .rs1_addr(rs1_addr_i),
+    .rs2_addr(rs2_addr_i),
+    .rd_addr(rd_addr_i),
+
+    .write_reg(write_reg),
+
+    .mem_read(mem_read),
+    .mem_write(mem_write),
+    .mem_byte_en(mem_byte_en)
+);
+
+ex _ex(  // 组合逻辑
+    .rst(rst),
+    .alu_op_i(alu_op_o),
+    .alu_sel_a(alu_sel_a_o),
+    .alu_sel_b(alu_sel_b_o),
+    
+    .pc(pc),
+    .pc_now(pc_now),
+    .reg_a(rs1_data_o),
+
+    .imm_b(imm_o),
+    .reg_b(rs2_data_o),
+
+    .result(ex_result)
+);
+
+reg_file _reg_file(
+    .clk(clk),
+    .rst(rst),
+    .read_rs1(read_rs1),
+    .read_rs2(read_rs2),
+    .write_reg(write_reg_buf), // 写寄存器是时序逻辑
+    .rs1_addr(rs1_addr_i), // 读寄存器是组合逻辑
+    .rs2_addr(rs2_addr_i),
+    .rd_addr(rd_addr_i),
+    .rs1_data(rs1_data_i),
+    .rs2_data(rs2_data_i),
+    .rd_data(rd_data_i)
+);
+
+cpu _cpu(
+    .clk(clk),
+    .rst(rst),
+    
+    .done(done),
+    .branch_flag_i(branch_flag),
+    .link_flag_i(link_flag),
+    .write_reg(write_reg),
+    
+    .ex_result_i(ex_result),
+    .ram_data_i(ram_data_i),
+    .mem_read(mem_read),
+    .mem_write(mem_write),
+    .mem_byte_en(mem_byte_en),
+    
+    .rs1_data_i(rs1_data_o),
+    .rs2_data_i(rs2_data_o),
+
+    .io_oen(io_oen),
+    .io_wen(io_wen),
+    .io_byte_en(io_byte_en),
+    .ram_data_o(ram_data_o),
+
+    .address(address),
+    .write_reg_buf(write_reg_buf),
+
+    .inst(inst),
+    .pc(pc),
+    .pc_now(pc_now),
+    .rd_data_o(rd_data_i)
+);
 
 endmodule
