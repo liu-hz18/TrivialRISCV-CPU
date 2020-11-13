@@ -53,44 +53,105 @@ always @(*) begin
             result = (src_a + src_b) & (~32'h0000_0001);
         end
         `ALU_OP_MIN: begin
-            result = (src_a < src_b) ? src_a : src_b;
+            result = ( $signed(src_a) < $signed(src_b) ) ? src_a : src_b;
         end
         `ALU_OP_CTZ: begin
-            case(src_a)
-            32'b????_????_????_????_????_????_????_???1: begin result = 0; end
-            32'b????_????_????_????_????_????_????_??10: begin result = 1; end
-            32'b????_????_????_????_????_????_????_?100: begin result = 2; end
-            32'b????_????_????_????_????_????_????_1000: begin result = 3; end
-            32'b????_????_????_????_????_????_???1_0000: begin result = 4; end
-            32'b????_????_????_????_????_????_??10_0000: begin result = 5; end
-            32'b????_????_????_????_????_????_?100_0000: begin result = 6; end
-            32'b????_????_????_????_????_????_1000_0000: begin result = 7; end
-            32'b????_????_????_????_????_???1_0000_0000: begin result = 8; end
-            32'b????_????_????_????_????_??10_0000_0000: begin result = 9; end
-            32'b????_????_????_????_????_?100_0000_0000: begin result = 10; end
-            32'b????_????_????_????_????_1000_0000_0000: begin result = 11; end
-            32'b????_????_????_????_???1_0000_0000_0000: begin result = 12; end
-            32'b????_????_????_????_??10_0000_0000_0000: begin result = 13; end
-            32'b????_????_????_????_?100_0000_0000_0000: begin result = 14; end
-            32'b????_????_????_????_1000_0000_0000_0000: begin result = 15; end
-            32'b????_????_????_???1_0000_0000_0000_0000: begin result = 16; end
-            32'b????_????_????_??10_0000_0000_0000_0000: begin result = 17; end
-            32'b????_????_????_?100_0000_0000_0000_0000: begin result = 18; end
-            32'b????_????_????_1000_0000_0000_0000_0000: begin result = 19; end
-            32'b????_????_???1_0000_0000_0000_0000_0000: begin result = 20; end
-            32'b????_????_??10_0000_0000_0000_0000_0000: begin result = 21; end
-            32'b????_????_?100_0000_0000_0000_0000_0000: begin result = 22; end
-            32'b????_????_1000_0000_0000_0000_0000_0000: begin result = 23; end
-            32'b????_???1_0000_0000_0000_0000_0000_0000: begin result = 24; end
-            32'b????_??10_0000_0000_0000_0000_0000_0000: begin result = 25; end
-            32'b????_?100_0000_0000_0000_0000_0000_0000: begin result = 26; end
-            32'b????_1000_0000_0000_0000_0000_0000_0000: begin result = 27; end
-            32'b???1_0000_0000_0000_0000_0000_0000_0000: begin result = 28; end
-            32'b??10_0000_0000_0000_0000_0000_0000_0000: begin result = 29; end
-            32'b?100_0000_0000_0000_0000_0000_0000_0000: begin result = 30; end
-            32'b1000_0000_0000_0000_0000_0000_0000_0000: begin result = 31; end
-            32'b0000_0000_0000_0000_0000_0000_0000_0000: begin result = 32; end
-            endcase
+            if (~src_a[0]) begin
+                result = result + 1;
+                if (~src_a[1]) begin
+                    result = result + 1;
+                    if (~src_a[2]) begin
+                        result = result + 1;
+                        if (~src_a[3]) begin
+                            result = result + 1;
+                            if (~src_a[4]) begin
+                                result = result + 1;
+                                if (~src_a[5]) begin
+                                    result = result + 1;
+                                    if (~src_a[6]) begin
+                                        result = result + 1;
+                                        if (~src_a[7]) begin
+                                            result = result + 1;
+                                            if (~src_a[8]) begin
+                                                result = result + 1;
+                                                if (~src_a[9]) begin
+                                                    result = result + 1;
+                                                    if (~src_a[10]) begin
+                                                        result = result + 1;
+                                                        if (~src_a[11]) begin
+                                                            result = result + 1;
+                                                            if (~src_a[12]) begin
+                                                                result = result + 1;
+                                                                if (~src_a[13]) begin
+                                                                    result = result + 1;
+                                                                    if (~src_a[14]) begin
+                                                                        result = result + 1;
+                                                                        if (~src_a[15]) begin
+                                                                            result = result + 1;
+                                                                            if (~src_a[16]) begin
+                                                                                result = result + 1;
+                                                                                if (~src_a[17]) begin
+                                                                                    result = result + 1;
+                                                                                    if (~src_a[18]) begin
+                                                                                        result = result + 1;
+                                                                                        if (~src_a[19]) begin
+                                                                                            result = result + 1;
+                                                                                            if (~src_a[20]) begin
+                                                                                                result = result + 1;
+                                                                                                if (~src_a[21]) begin
+                                                                                                    result = result + 1;
+                                                                                                    if (~src_a[22]) begin
+                                                                                                        result = result + 1;
+                                                                                                        if (~src_a[23]) begin
+                                                                                                            result = result + 1;
+                                                                                                            if (~src_a[24]) begin
+                                                                                                                result = result + 1;
+                                                                                                                if (~src_a[25]) begin
+                                                                                                                    result = result + 1;
+                                                                                                                    if (~src_a[26]) begin
+                                                                                                                        result = result + 1;
+                                                                                                                        if (~src_a[27]) begin
+                                                                                                                            result = result + 1;
+                                                                                                                            if (~src_a[28]) begin
+                                                                                                                                result = result + 1;
+                                                                                                                                if (~src_a[29]) begin
+                                                                                                                                    result = result + 1;
+                                                                                                                                    if(~src_a[30]) begin
+                                                                                                                                        result =result + 1;
+                                                                                                                                        if(~src_a[31]) begin
+                                                                                                                                            result =result + 1; 
+                                                                                                                                        end
+                                                                                                                                    end
+                                                                                                                                end
+                                                                                                                            end
+                                                                                                                        end
+                                                                                                                    end
+                                                                                                                end
+                                                                                                            end
+                                                                                                        end
+                                                                                                    end
+                                                                                                end
+                                                                                            end
+                                                                                        end
+                                                                                    end
+                                                                                end
+                                                                            end
+                                                                        end
+                                                                    end
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end
         `ALU_OP_SBCLR: begin
             result = src_a & ~(32'h0000_0001 << (src_b & 31));

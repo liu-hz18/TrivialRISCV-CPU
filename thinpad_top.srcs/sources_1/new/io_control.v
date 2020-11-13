@@ -88,7 +88,7 @@ wire uart_done;
 // 总线控制逻辑，三态端口
 reg data_z;
 reg[`RegBus] data_to_reg;
-assign base_ram_data_wire = (~data_z && (~use_ext_ram_bus && ram_or_uart) || ~ram_or_uart) ? data_to_reg : 32'bz;
+assign base_ram_data_wire = (~data_z && ((~use_ext_ram_bus && ram_or_uart) || ~ram_or_uart)) ? data_to_reg : 32'bz;
 assign ext_ram_data_wire  = (~data_z &&  use_ext_ram_bus && ram_or_uart) ? data_to_reg : 32'bz;
 
 uart_io _uart_io(

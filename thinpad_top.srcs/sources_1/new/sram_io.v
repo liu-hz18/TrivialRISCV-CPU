@@ -103,6 +103,7 @@ always @(posedge clk or posedge rst) begin
                     ram_ce_n <= 1'b1;
                     ram_oe_n <= 1'b1;
                     ram_we_n <= 1'b1;
+                    ram_be_n <= 4'b0000;
                     state <= STATE_IDLE;
                 end
             end

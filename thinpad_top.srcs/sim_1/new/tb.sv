@@ -67,9 +67,9 @@ initial begin
     //     clock_btn = 0; //松开手工时钟按钮
     // end
     // 模拟PC通过串口发送字符
-    // cpld.pc_send_byte(8'h32);
-    // #10000;
-    // cpld.pc_send_byte(8'h33);
+    cpld.pc_send_byte(8'h32);
+    #10000;
+    cpld.pc_send_byte(8'h33);
 end
 
 // 待测试用户设计
