@@ -120,6 +120,11 @@ wire write_reg;
 wire mem_read;
 wire mem_write;
 wire mem_byte_en;
+wire exception_handle_flag;
+wire exception_recover_flag;
+wire[4:0] csr_write_en;
+wire[`RegBus] mepc_data_o_id;
+wire[`RegBus] mstatus_data_o_id;
 
 // 连接CPU和EX模块
 wire[`RegBus] ex_result;
@@ -151,6 +156,21 @@ wire[`AluOpWidth-1:0] alu_op_o;
 wire[`RegBus] rs1_data_o;
 wire[`RegBus] rs2_data_o;
 wire[`RegBus] imm_o;
+
+// 连接异常寄存器和ID模块
+wire[`RegBus] mtvec_data_i;
+wire[`RegBus] mscratch_data_i;
+wire[`RegBus] mepc_data_i;
+wire[`RegBus] mcause_data_i;
+wire[`RegBus] mstatus_data_i;
+
+wire[`RegBus] mtvec_data_o;
+wire[`RegBus] mscratch_data_o;
+wire[`RegBus] mepc_data_o;
+wire[`RegBus] mcause_data_o;
+wire[`RegBus] mstatus_data_o;
+
+wire[4:0] csr_write_en_cpu;
 
 io_control _io_control(
     .clk(clk),
@@ -215,7 +235,24 @@ ctrl _id(  // 组合逻辑
 
     .mem_read(mem_read),
     .mem_write(mem_write),
-    .mem_byte_en(mem_byte_en)
+    .mem_byte_en(mem_byte_en),
+
+    .exception_handle_flag(exception_handle_flag),
+    .exception_recover_flag(exception_recover_flag),
+    
+    .mtvec_data_i(mtvec_data_i),
+    .mscratch_data_i(mscratch_data_i),
+    .mepc_data_i(mepc_data_i),
+    .mcause_data_i(mcause_data_i),
+    .mstatus_data_i(mstatus_data_i),
+    
+    .csr_write_en(csr_write_en),
+
+    .mtvec_data_o(mtvec_data_o),
+    .mscratch_data_o(mscratch_data_o),
+    .mepc_data_o(mepc_data_o_id),
+    .mcause_data_o(mcause_data_o),
+    .mstatus_data_o(mstatus_data_o_id)
 );
 
 ex _ex(  // 组合逻辑
@@ -248,6 +285,25 @@ reg_file _reg_file(
     .rd_data(rd_data_i)
 );
 
+csr_reg _csr_reg(
+    .clk(clk),
+    .rst(rst),
+    
+    .csr_write_en(csr_write_en_cpu),
+    
+    .mtvec_data_o(mtvec_data_i),
+    .mscratch_data_o(mscratch_data_i),
+    .mepc_data_o(mepc_data_i),
+    .mcause_data_o(mcause_data_i),
+    .mstatus_data_o(mstatus_data_i),
+    
+    .mtvec_data_i(mtvec_data_o),
+    .mscratch_data_i(mscratch_data_o),
+    .mepc_data_i(mepc_data_o),
+    .mcause_data_i(mcause_data_o),
+    .mstatus_data_i(mstatus_data_o)
+);
+
 cpu _cpu(
     .clk(clk),
     .rst(rst),
@@ -277,7 +333,22 @@ cpu _cpu(
     .inst(inst),
     .pc(pc),
     .pc_now(pc_now),
-    .rd_data_o(rd_data_i)
+    .rd_data_o(rd_data_i),
+
+    .exception_handle_flag_i(exception_handle_flag),
+    .exception_recover_flag_i(exception_recover_flag),
+
+    .csr_write_en_id_cpu(csr_write_en),
+    .mepc_data_o_id(mepc_data_o_id),
+    .mstatus_data_o_id(mstatus_data_o_id),
+
+    .mepc_data_i(mepc_data_i),
+    .mstatus_data_i(mstatus_data_i),
+    .mtvec_data_i(mtvec_data_i),
+
+    .csr_write_en(csr_write_en_cpu),
+    .mepc_data_o(mepc_data_o),
+    .mstatus_data_o(mstatus_data_o)
 );
 
 endmodule

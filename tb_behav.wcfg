@@ -11,15 +11,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="578618040fs"></ZoomStartTime>
-      <ZoomEndTime time="578871041fs"></ZoomEndTime>
-      <Cursor1Time time="578977040fs"></Cursor1Time>
+      <ZoomStartTime time="79042120fs"></ZoomStartTime>
+      <ZoomEndTime time="80052827fs"></ZoomEndTime>
+      <Cursor1Time time="79672676fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="175"></NameColumnWidth>
-      <ValueColumnWidth column_width="140"></ValueColumnWidth>
+      <ValueColumnWidth column_width="135"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="58" />
+   <WVObjectSize size="63" />
    <wvobject fp_name="/tb/clk_50M" type="logic">
       <obj_property name="ElementShortName">clk_50M</obj_property>
       <obj_property name="ObjectShortName">clk_50M</obj_property>
@@ -165,8 +165,8 @@
       <obj_property name="ObjectShortName">uart_tsre</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/BASE_RAM_INIT_FILE" type="array">
-      <obj_property name="ElementShortName">BASE_RAM_INIT_FILE[295:0]</obj_property>
-      <obj_property name="ObjectShortName">BASE_RAM_INIT_FILE[295:0]</obj_property>
+      <obj_property name="ElementShortName">BASE_RAM_INIT_FILE[271:0]</obj_property>
+      <obj_property name="ObjectShortName">BASE_RAM_INIT_FILE[271:0]</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/EXT_RAM_INIT_FILE" type="array">
       <obj_property name="ElementShortName">EXT_RAM_INIT_FILE[103:0]</obj_property>
@@ -231,7 +231,6 @@
    <wvobject fp_name="/tb/dut/_reg_file/registers" type="array">
       <obj_property name="ElementShortName">registers[0:31][31:0]</obj_property>
       <obj_property name="ObjectShortName">registers[0:31][31:0]</obj_property>
-      <obj_property name="isExpanded"></obj_property>
    </wvobject>
    <wvobject fp_name="/tb/dut/_id/rd_addr" type="array">
       <obj_property name="ElementShortName">rd_addr[4:0]</obj_property>
@@ -252,5 +251,25 @@
    <wvobject fp_name="/tb/base_ram_oe_n" type="logic">
       <obj_property name="ElementShortName">base_ram_oe_n</obj_property>
       <obj_property name="ObjectShortName">base_ram_oe_n</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_csr_reg/mtvec_reg" type="array">
+      <obj_property name="ElementShortName">mtvec_reg[31:0]</obj_property>
+      <obj_property name="ObjectShortName">mtvec_reg[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_csr_reg/mscratch_reg" type="array">
+      <obj_property name="ElementShortName">mscratch_reg[31:0]</obj_property>
+      <obj_property name="ObjectShortName">mscratch_reg[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_csr_reg/mepc_reg" type="array">
+      <obj_property name="ElementShortName">mepc_reg[31:0]</obj_property>
+      <obj_property name="ObjectShortName">mepc_reg[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_csr_reg/mstatus_reg" type="array">
+      <obj_property name="ElementShortName">mstatus_reg[31:0]</obj_property>
+      <obj_property name="ObjectShortName">mstatus_reg[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_csr_reg/mcause_reg" type="array">
+      <obj_property name="ElementShortName">mcause_reg[31:0]</obj_property>
+      <obj_property name="ObjectShortName">mcause_reg[31:0]</obj_property>
    </wvobject>
 </wave_config>

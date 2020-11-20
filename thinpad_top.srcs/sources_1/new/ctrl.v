@@ -14,7 +14,7 @@ module ctrl(
     output reg[1:0] alu_sel_b_o,
     output reg[`AluOpWidth-1:0] alu_op_o,
 
-    // 送到EX阶段的输�??
+    // 送到EX阶段的输??
     output reg[`RegBus] rs1_data_o,
     output reg[`RegBus] rs2_data_o,
 
@@ -36,7 +36,25 @@ module ctrl(
     // 访存信息
     output reg mem_read,
     output reg mem_write,
-    output reg mem_byte_en
+    output reg mem_byte_en,
+
+    // 进入异常处理阶段
+    output reg exception_handle_flag,
+    output reg exception_recover_flag,
+
+    // CSR寄存器控制信号
+    input wire[`RegBus] mtvec_data_i,
+    input wire[`RegBus] mscratch_data_i,
+    input wire[`RegBus] mepc_data_i,
+    input wire[`RegBus] mcause_data_i,
+    input wire[`RegBus] mstatus_data_i,
+    
+    output reg[4:0] csr_write_en,
+    output reg[`RegBus] mtvec_data_o,
+    output reg[`RegBus] mscratch_data_o,
+    output reg[`RegBus] mepc_data_o,
+    output reg[`RegBus] mcause_data_o,
+    output reg[`RegBus] mstatus_data_o
 );
 
 wire[6:0] inst_opcode = inst_i[6:0];
@@ -45,6 +63,8 @@ wire[6:0] inst_func7 = inst_i[31:25];
 wire[4:0] inst_rs1 = inst_i[19:15];
 wire[4:0] inst_rs2 = inst_i[24:20];
 wire[4:0] inst_rd = inst_i[11:7];
+
+wire[11:0] inst_csr_addr = inst_i[31:20];
 
 wire[9:0] op = {inst_i[14:12], inst_i[6:0]};
 
@@ -76,6 +96,7 @@ localparam FUNC3_SCBLR = 3'b001;
 localparam FUNC3_CSRRW = 3'b001;
 localparam FUNC3_CSRRS = 3'b010;
 localparam FUNC3_CSRRC = 3'b011;
+localparam FUNC3_E     = 3'b000;
 
 localparam RS2_EBREAK  = 5'b00001;
 localparam RS2_ECALL   = 5'b00000;
@@ -86,6 +107,14 @@ localparam FUNC7_SLL   = 7'b0000000;
 
 localparam FUNC7_MIN   = 7'b0000101;
 localparam FUNC7_XOR   = 7'b0000000;
+
+localparam CSR_ADDR_MTVEC = 12'h305;
+localparam CSR_ADDR_MEPC  = 12'h341;
+localparam CSR_ADDR_MCAUSE= 12'h342;
+localparam CSR_ADDR_MSCRATCH=12'h340;
+localparam CSR_ADDR_MSTATUS=12'h300;
+
+reg csr_en;
 
 // 指令译码，组合�?�辑
 always @(*) begin
@@ -102,6 +131,15 @@ always @(*) begin
         {mem_read, mem_write} = 2'b00;
         mem_byte_en = 1'b0;
         link_flag_o = 1'b0;
+        csr_en = 1'b0;
+        csr_write_en = 5'b00000;
+        exception_handle_flag = 1'b0;
+        exception_recover_flag = 1'b0;
+        mtvec_data_o = `ZERO_WORD;
+        mscratch_data_o = `ZERO_WORD;
+        mepc_data_o = `ZERO_WORD;
+        mcause_data_o = `ZERO_WORD;
+        mstatus_data_o = `ZERO_WORD;
     end else begin
         {read_rs1, read_rs2} = 2'b00;
         rs1_addr = `ZERO_REG_ADDR;
@@ -115,9 +153,13 @@ always @(*) begin
         {mem_read, mem_write} = 2'b00;
         mem_byte_en = 1'b0;
         link_flag_o = 1'b0;
+        csr_write_en = 5'b00000;
+        csr_en = 1'b0;
+        exception_handle_flag = 1'b0;
+        exception_recover_flag = 1'b0;
         case (inst_opcode)
         OPCODE_R: begin
-            read_rs1 = 1'b1; // �??2个寄存器
+            read_rs1 = 1'b1; // ??2个寄存器
             read_rs2 = 1'b1;
             write_reg = 1'b1;
             rs1_addr = inst_i[19:15];
@@ -157,12 +199,12 @@ always @(*) begin
             endcase
         end
         OPCODE_I: begin
-            read_rs1 = 1'b1; // �??1个寄存器
+            read_rs1 = 1'b1; // ??1个寄存器
             write_reg = 1'b1;
             rs1_addr = inst_i[19:15];
             rs2_addr = inst_i[24:20];
             rd_addr = inst_i[11:7];
-            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展�??32�??
+            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展??32??
             alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自寄存器a, b
             alu_sel_b_o = `ALU_SRCB_IMM;
             case(inst_func3)
@@ -198,7 +240,7 @@ always @(*) begin
         end
         OPCODE_B: begin
             alu_op_o = `ALU_OP_ADD;
-            read_rs1 = 1'b1; // �??2个寄存器
+            read_rs1 = 1'b1; // ??2个寄存器
             read_rs2 = 1'b1;
             rs1_addr = inst_i[19:15];
             rs2_addr = inst_i[24:20];
@@ -208,7 +250,7 @@ always @(*) begin
             FUNC3_BEQ: begin
                 if (rs1_data_o == rs2_data_o) begin
                     branch_flag_o = 1'b1;
-                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展�??32�??
+                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
                 end else begin
                     branch_flag_o = 1'b0;
                 end
@@ -216,7 +258,7 @@ always @(*) begin
             FUNC3_BNE: begin
                 if (rs1_data_o != rs2_data_o) begin
                     branch_flag_o = 1'b1;
-                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展�??32�??
+                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
                 end else begin
                     branch_flag_o = 1'b0;
                 end
@@ -235,7 +277,7 @@ always @(*) begin
             rs2_addr = inst_i[24:20];
             alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自寄存器a, b
             alu_sel_b_o = `ALU_SRCB_IMM;
-            imm_o = {{20{inst_i[31]}}, inst_i[31:25], inst_i[11:7]};  // 符号扩展�??32�??
+            imm_o = {{20{inst_i[31]}}, inst_i[31:25], inst_i[11:7]};  // 符号扩展??32??
             case(inst_func3)
             FUNC3_LS_W: begin
                 // blank here
@@ -257,7 +299,7 @@ always @(*) begin
             rd_addr = inst_i[11:7];
             alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自寄存器a, b
             alu_sel_b_o = `ALU_SRCB_IMM;
-            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展�??32�??
+            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展??32??
             case(inst_func3)
             FUNC3_LS_W: begin
                 // blank here
@@ -273,7 +315,7 @@ always @(*) begin
         OPCODE_AUIPC: begin // auipc rd, imm
             alu_op_o = `ALU_OP_ADD;
             write_reg = 1'b1;
-            imm_o = {inst_i[31:12], 12'b0000_0000_0000};  // 符号扩展�??32�??
+            imm_o = {inst_i[31:12], 12'b0000_0000_0000};  // 符号扩展??32??
             rd_addr = inst_i[11:7];
             alu_sel_a_o = `ALU_SRCA_PC; // 设置ALU输入来自寄存器a, b
             alu_sel_b_o = `ALU_SRCB_IMM;
@@ -281,9 +323,9 @@ always @(*) begin
         OPCODE_LUI: begin // lui 
             alu_op_o = `ALU_OP_ADD;
             rs1_addr = `ZERO_REG_ADDR;
-            read_rs1 = 1'b1; // �??1个寄存器
+            read_rs1 = 1'b1; // ??1个寄存器
             write_reg = 1'b1;
-            imm_o = {inst_i[31:12], 12'b0000_0000_0000};  // 符号扩展�??32�??
+            imm_o = {inst_i[31:12], 12'b0000_0000_0000};  // 符号扩展??32??
             rd_addr = inst_i[11:7];
             alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自寄存器a, b
             alu_sel_b_o = `ALU_SRCB_IMM;
@@ -296,11 +338,11 @@ always @(*) begin
             alu_sel_b_o = `ALU_SRCB_IMM;
             branch_flag_o = 1'b1;
             link_flag_o = 1'b1;
-            imm_o = {{12{inst_i[31]}}, inst_i[31], inst_i[19:12], inst_i[20], inst_i[30:21], 1'b0};  // 符号扩展�??32�??
+            imm_o = {{12{inst_i[31]}}, inst_i[31], inst_i[19:12], inst_i[20], inst_i[30:21], 1'b0};  // 符号扩展??32??
         end
         OPCODE_JALR: begin // jalr
             alu_op_o = `ALU_OP_JALR;
-            read_rs1 = 1'b1; // �??1个寄存器
+            read_rs1 = 1'b1; // ??1个寄存器
             rs1_addr = inst_i[19:15];
             write_reg = 1'b1;
             rd_addr = inst_i[11:7];
@@ -308,7 +350,100 @@ always @(*) begin
             alu_sel_b_o = `ALU_SRCB_IMM;
             branch_flag_o = 1'b1;
             link_flag_o = 1'b1;
-            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展�??32�??
+            imm_o = {{20{inst_i[31]}}, inst_i[31:20]};  // 符号扩展??32??
+        end
+        OPCODE_CSRR: begin
+            csr_en = 1'b1;
+            rs1_addr = inst_i[19:15];
+            read_rs1 = 1'b1; // ??1个寄存器
+            rd_addr = inst_i[11:7];
+            write_reg = 1'b1;
+            alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自PC和IMM
+            alu_sel_b_o = `ALU_SRCB_IMM;
+            imm_o = `ZERO_WORD;
+            alu_op_o = `ALU_OP_ADD; // rs1_data_o + 0 = rs1_data_o
+            case (inst_func3)
+            FUNC3_CSRRW: begin
+                // 写使能信号
+                if (inst_csr_addr==CSR_ADDR_MTVEC) begin
+                    csr_write_en[4] = 1'b1;
+                    mtvec_data_o = rs1_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MEPC) begin
+                    csr_write_en[3] = 1'b1;
+                    mepc_data_o = rs1_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MCAUSE) begin
+                    csr_write_en[2] = 1'b1;
+                    mcause_data_o = rs1_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSCRATCH) begin
+                    csr_write_en[1] = 1'b1;
+                    mscratch_data_o = rs1_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSTATUS) begin
+                    csr_write_en[0] = 1'b1;
+                    mstatus_data_o = rs1_data_i;
+                end
+            end
+            FUNC3_CSRRS: begin
+                // 写使能信号
+                if (inst_csr_addr==CSR_ADDR_MTVEC) begin
+                    csr_write_en[4] = 1'b1;
+                    mtvec_data_o = rs1_data_i | mtvec_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MEPC) begin
+                    csr_write_en[3] = 1'b1;
+                    mepc_data_o = rs1_data_i | mepc_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MCAUSE) begin
+                    csr_write_en[2] = 1'b1;
+                    mcause_data_o = rs1_data_i | mcause_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSCRATCH) begin
+                    csr_write_en[1] = 1'b1;
+                    mscratch_data_o = rs1_data_i | mscratch_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSTATUS) begin
+                    csr_write_en[0] = 1'b1;
+                    mstatus_data_o = rs1_data_i | mstatus_data_i;
+                end
+            end
+            FUNC3_CSRRC: begin
+                // 写使能信号
+                if (inst_csr_addr==CSR_ADDR_MTVEC) begin
+                    csr_write_en[4] = 1'b1;
+                    mtvec_data_o = (~rs1_data_i) & mtvec_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MEPC) begin
+                    csr_write_en[3] = 1'b1;
+                    mepc_data_o = (~rs1_data_i) & mepc_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MCAUSE) begin
+                    csr_write_en[2] = 1'b1;
+                    mcause_data_o = (~rs1_data_i) & mcause_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSCRATCH) begin
+                    csr_write_en[1] = 1'b1;
+                    mscratch_data_o = (~rs1_data_i) & mscratch_data_i;
+                end else if (inst_csr_addr==CSR_ADDR_MSTATUS) begin
+                    csr_write_en[0] = 1'b1;
+                    mstatus_data_o = (~rs1_data_i) & mstatus_data_i;
+                end
+            end
+            FUNC3_E: begin
+                case(inst_rs2) 
+                RS2_ECALL: begin
+                    exception_handle_flag = 1'b1;
+                    csr_write_en[2] = 1'b1;
+                    mcause_data_o = {1'b0, 31'b1011};
+                end
+                RS2_EBREAK: begin
+                    exception_handle_flag = 1'b1;
+                    csr_write_en[2] = 1'b1;
+                    mcause_data_o = {1'b0, 31'b0011};
+                end
+                RS2_MRET: begin
+                    exception_handle_flag = 1'b1;
+                    exception_recover_flag = 1'b1; // 从机器模式返回
+                end
+                default: begin
+                end
+                endcase
+            end
+            default: begin
+                
+            end
+            endcase
         end
         default: begin
 
@@ -317,10 +452,22 @@ always @(*) begin
     end
 end
 
-// 确定A寄存器数�??
+// 确定A寄存器数??
 always @(*) begin
     if (rst) begin
         rs1_data_o = `ZERO_WORD;
+    end else if (csr_en == 1'b1) begin
+        if (inst_csr_addr==CSR_ADDR_MTVEC) begin
+            rs1_data_o = mtvec_data_i;
+        end else if (inst_csr_addr==CSR_ADDR_MEPC) begin
+            rs1_data_o = mepc_data_i;
+        end else if (inst_csr_addr==CSR_ADDR_MCAUSE) begin
+            rs1_data_o = mcause_data_i;
+        end else if (inst_csr_addr==CSR_ADDR_MSCRATCH) begin
+            rs1_data_o = mscratch_data_i;
+        end else if (inst_csr_addr==CSR_ADDR_MSTATUS) begin
+            rs1_data_o = mstatus_data_i;
+        end
     end else if (read_rs1 == 1'b1) begin
         rs1_data_o = rs1_data_i;
     end else begin
@@ -328,7 +475,7 @@ always @(*) begin
     end
 end
 
-// 确定B寄存器数�??
+// 确定B寄存器数??
 always @(*) begin
     if (rst) begin
         rs2_data_o = `ZERO_WORD;
