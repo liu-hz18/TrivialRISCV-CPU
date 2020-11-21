@@ -5,19 +5,21 @@ module csr_reg(
     input wire clk,
     input wire rst,
 
-    input wire[4:0] csr_write_en,
+    input wire[5:0] csr_write_en,
 
     output reg[`RegBus] mtvec_data_o,
     output reg[`RegBus] mscratch_data_o,
     output reg[`RegBus] mepc_data_o,
     output reg[`RegBus] mcause_data_o,
     output reg[`RegBus] mstatus_data_o,
+    output reg[`RegBus] satp_data_o,
 
     input wire[`RegBus] mtvec_data_i,
     input wire[`RegBus] mscratch_data_i,
     input wire[`RegBus] mepc_data_i,
     input wire[`RegBus] mcause_data_i,
-    input wire[`RegBus] mstatus_data_i
+    input wire[`RegBus] mstatus_data_i,
+    input wire[`RegBus] satp_data_i
 );
 
 reg[`RegBus] mtvec_reg;
@@ -25,8 +27,18 @@ reg[`RegBus] mscratch_reg;
 reg[`RegBus] mepc_reg;
 reg[`RegBus] mcause_reg;
 reg[`RegBus] mstatus_reg;
+reg[`RegBus] satp_reg;
 
 // 写寄存器
+// satp
+always @(posedge clk) begin
+    if (~rst) begin
+        if (csr_write_en[5]) begin
+            satp_reg <= satp_data_i;
+        end
+    end
+end
+
 // mtvec
 always @(posedge clk) begin
     if (~rst) begin
@@ -73,6 +85,15 @@ always @(posedge clk) begin
 end
 
 // 读寄存器
+// satp
+always @(*) begin
+    if (rst) begin
+        satp_data_o = `ZERO_WORD;
+    end else begin
+        satp_data_o = satp_reg;
+    end
+end
+
 // mtvec
 always @(*) begin
     if (rst) begin

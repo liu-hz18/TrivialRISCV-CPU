@@ -82,12 +82,12 @@ module thinpad_top(
 );
 
 // PLL分频示例
-wire locked, clk_10M, clk_20M;
+wire locked, clk_80M, clk_20M;
 pll_example clock_gen(
   // Clock in ports
   .clk_in1(clk_50M),  // 外部时钟输入
   // Clock out ports
-  .clk_out1(clk_10M), // 时钟输出1，频率在IP配置界面中设置
+  .clk_out1(clk_80M), // 时钟输出1，频率在IP配置界面中设置
   .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
   // Status and control signals
   .reset(reset_btn), // PLL复位输入
@@ -95,16 +95,16 @@ pll_example clock_gen(
                      // 后级电路复位信号应当由它生成（见下）
 );
 
-reg reset_of_clk10M;
-// 异步复位，同步释放，将locked信号转为后级电路的复位reset_of_clk10M
-always@(posedge clk_10M or negedge locked) begin
-    if(~locked) reset_of_clk10M <= 1'b1;
-    else        reset_of_clk10M <= 1'b0;
+reg reset_of_clk80M;
+// 异步复位，同步释放，将locked信号转为后级电路的复位 reset_of_clk80M
+always@(posedge clk_80M or negedge locked) begin
+    if(~locked) reset_of_clk80M <= 1'b1;
+    else        reset_of_clk80M <= 1'b0;
 end
 
 // 选择时钟和复位信号
-// wire clk = clk_10M;
-// wire rst = reset_of_clk10M;
+// wire clk = clk_80M;
+// wire rst = reset_of_clk80M;
 wire clk = clk_50M; // 50M也是可以的
 wire rst = reset_btn;
 
@@ -122,7 +122,7 @@ wire mem_write;
 wire mem_byte_en;
 wire exception_handle_flag;
 wire exception_recover_flag;
-wire[4:0] csr_write_en;
+wire[5:0] csr_write_en;
 wire[`RegBus] mepc_data_o_id;
 wire[`RegBus] mstatus_data_o_id;
 wire[`RegBus] mcause_data_o_id;
@@ -165,14 +165,16 @@ wire[`RegBus] mscratch_data_i;
 wire[`RegBus] mepc_data_i;
 wire[`RegBus] mcause_data_i;
 wire[`RegBus] mstatus_data_i;
+wire[`RegBus] satp_data_i;
 
 wire[`RegBus] mtvec_data_o;
 wire[`RegBus] mscratch_data_o;
 wire[`RegBus] mepc_data_o;
 wire[`RegBus] mcause_data_o;
 wire[`RegBus] mstatus_data_o;
+wire[`RegBus] satp_data_o;
 
-wire[4:0] csr_write_en_cpu;
+wire[5:0] csr_write_en_cpu;
 
 io_control _io_control(
     .clk(clk),
@@ -247,6 +249,7 @@ ctrl _id(  // 组合逻辑
     .mepc_data_i(mepc_data_i),
     .mcause_data_i(mcause_data_i),
     .mstatus_data_i(mstatus_data_i),
+    .satp_data_i(satp_data_i),
     
     .csr_write_en(csr_write_en),
 
@@ -255,6 +258,7 @@ ctrl _id(  // 组合逻辑
     .mepc_data_o(mepc_data_o_id),
     .mcause_data_o(mcause_data_o_id),
     .mstatus_data_o(mstatus_data_o_id),
+    .satp_data_o(satp_data_o),
 
     .mode_cpu(mode_cpu)
 );
@@ -300,12 +304,14 @@ csr_reg _csr_reg(
     .mepc_data_o(mepc_data_i),
     .mcause_data_o(mcause_data_i),
     .mstatus_data_o(mstatus_data_i),
+    .satp_data_o(satp_data_i),
     
     .mtvec_data_i(mtvec_data_o),
     .mscratch_data_i(mscratch_data_o),
     .mepc_data_i(mepc_data_o),
     .mcause_data_i(mcause_data_o),
-    .mstatus_data_i(mstatus_data_o)
+    .mstatus_data_i(mstatus_data_o),
+    .satp_data_i(satp_data_o)
 );
 
 cpu _cpu(

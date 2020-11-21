@@ -11,15 +11,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="1221708930fs"></ZoomStartTime>
-      <ZoomEndTime time="1223046174fs"></ZoomEndTime>
-      <Cursor1Time time="1223530794fs"></Cursor1Time>
+      <ZoomStartTime time="590934470fs"></ZoomStartTime>
+      <ZoomEndTime time="592502471fs"></ZoomEndTime>
+      <Cursor1Time time="584209470fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="175"></NameColumnWidth>
-      <ValueColumnWidth column_width="130"></ValueColumnWidth>
+      <ValueColumnWidth column_width="125"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="63" />
+   <WVObjectSize size="65" />
    <wvobject fp_name="/tb/clk_50M" type="logic">
       <obj_property name="ElementShortName">clk_50M</obj_property>
       <obj_property name="ObjectShortName">clk_50M</obj_property>
@@ -27,6 +27,14 @@
    <wvobject fp_name="/tb/clk_11M0592" type="logic">
       <obj_property name="ElementShortName">clk_11M0592</obj_property>
       <obj_property name="ObjectShortName">clk_11M0592</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_cpu/clk" type="logic">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_cpu/rst" type="logic">
+      <obj_property name="ElementShortName">rst</obj_property>
+      <obj_property name="ObjectShortName">rst</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/clock_btn" type="logic">
       <obj_property name="ElementShortName">clock_btn</obj_property>
@@ -231,6 +239,7 @@
    <wvobject fp_name="/tb/dut/_reg_file/registers" type="array">
       <obj_property name="ElementShortName">registers[0:31][31:0]</obj_property>
       <obj_property name="ObjectShortName">registers[0:31][31:0]</obj_property>
+      <obj_property name="isExpanded"></obj_property>
    </wvobject>
    <wvobject fp_name="/tb/dut/_id/rd_addr" type="array">
       <obj_property name="ElementShortName">rd_addr[4:0]</obj_property>

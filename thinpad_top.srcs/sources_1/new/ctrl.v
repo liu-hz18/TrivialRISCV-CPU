@@ -48,13 +48,15 @@ module ctrl(
     input wire[`RegBus] mepc_data_i,
     input wire[`RegBus] mcause_data_i,
     input wire[`RegBus] mstatus_data_i,
+    input wire[`RegBus] satp_data_i,
     
-    output reg[4:0] csr_write_en,
+    output reg[5:0] csr_write_en,
     output reg[`RegBus] mtvec_data_o,
     output reg[`RegBus] mscratch_data_o,
     output reg[`RegBus] mepc_data_o,
     output reg[`RegBus] mcause_data_o,
     output reg[`RegBus] mstatus_data_o,
+    output reg[`RegBus] satp_data_o,
 
     input wire[1:0] mode_cpu
 );
@@ -119,8 +121,7 @@ localparam CSR_ADDR_MEPC  = 12'h341;
 localparam CSR_ADDR_MCAUSE= 12'h342;
 localparam CSR_ADDR_MSCRATCH=12'h340;
 localparam CSR_ADDR_MSTATUS=12'h300;
-
-
+localparam CSR_ADDR_SATP   = 12'h180;
 
 reg csr_en;
 
@@ -151,7 +152,7 @@ always @(*) begin
         mem_byte_en = 1'b0;
         link_flag_o = 1'b0;
         csr_en = 1'b0;
-        csr_write_en = 5'b00000;
+        csr_write_en = 6'b00_0000;
         exception_handle_flag = 1'b0;
         exception_recover_flag = 1'b0;
         mtvec_data_o = `ZERO_WORD;
@@ -159,6 +160,7 @@ always @(*) begin
         mepc_data_o = `ZERO_WORD;
         mcause_data_o = `ZERO_WORD;
         mstatus_data_o = `ZERO_WORD;
+        satp_data_o = `ZERO_WORD;
     end else begin
         {read_rs1, read_rs2} = 2'b00;
         rs1_addr = `ZERO_REG_ADDR;
@@ -172,7 +174,7 @@ always @(*) begin
         {mem_read, mem_write} = 2'b00;
         mem_byte_en = 1'b0;
         link_flag_o = 1'b0;
-        csr_write_en = 5'b00000;
+        csr_write_en = 6'b00_0000;
         csr_en = 1'b0;
         exception_handle_flag = 1'b0;
         exception_recover_flag = 1'b0;
@@ -181,6 +183,7 @@ always @(*) begin
         mepc_data_o = `ZERO_WORD;
         mcause_data_o = `ZERO_WORD;
         mstatus_data_o = `ZERO_WORD;
+        satp_data_o = `ZERO_WORD;
         case (inst_opcode)
         OPCODE_R: begin
             read_rs1 = 1'b1; // ??2个寄存器
@@ -406,6 +409,10 @@ always @(*) begin
             FUNC3_CSRRW: begin
                 // 写使能信号
                 case(inst_csr_addr)
+                CSR_ADDR_SATP: begin
+                    csr_write_en[5] = 1'b1;
+                    satp_data_o = rs1_data_i;
+                end
                 CSR_ADDR_MTVEC: begin
                     csr_write_en[4] = 1'b1;
                     mtvec_data_o = rs1_data_i;
@@ -436,28 +443,32 @@ always @(*) begin
             FUNC3_CSRRS: begin
                 // 写使能信号
                 case(inst_csr_addr)
+                CSR_ADDR_SATP: begin
+                    csr_write_en[5] = 1'b1;
+                    satp_data_o = rs1_data_i | satp_data_i;
+                end
                 CSR_ADDR_MTVEC: begin
                     csr_write_en[4] = 1'b1;
-                    mtvec_data_o = rs1_data_i | mtvec_data_i;;
+                    mtvec_data_o = rs1_data_i | mtvec_data_i;
                 end
                 CSR_ADDR_MEPC: begin
                     csr_write_en[3] = 1'b1;
-                    mepc_data_o = rs1_data_i | mepc_data_i;;
+                    mepc_data_o = rs1_data_i | mepc_data_i;
                 end
                 CSR_ADDR_MCAUSE: begin
                     csr_write_en[2] = 1'b1;
-                    mcause_data_o = rs1_data_i | mcause_data_i;;
+                    mcause_data_o = rs1_data_i | mcause_data_i;
                 end
                 CSR_ADDR_MSCRATCH: begin
                     csr_write_en[1] = 1'b1;
-                    mscratch_data_o = rs1_data_i | mscratch_data_i;;
+                    mscratch_data_o = rs1_data_i | mscratch_data_i;
                 end
                 CSR_ADDR_MSTATUS: begin
                     csr_write_en[0] = 1'b1;
-                    mstatus_data_o = rs1_data_i | mstatus_data_i;;
+                    mstatus_data_o = rs1_data_i | mstatus_data_i;
                 end
                 default: begin
-                    csr_write_en = 5'b00100;
+                    csr_write_en = 6'b000100;
                     exception_handle_flag = 1'b1;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
@@ -466,6 +477,10 @@ always @(*) begin
             FUNC3_CSRRC: begin
                 // 写使能信号
                 case(inst_csr_addr)
+                CSR_ADDR_SATP: begin
+                    csr_write_en[5] = 1'b1;
+                    satp_data_o = (~rs1_data_i) & satp_data_i;
+                end
                 CSR_ADDR_MTVEC: begin
                     csr_write_en[4] = 1'b1;
                     mtvec_data_o = (~rs1_data_i) & mtvec_data_i;
@@ -487,7 +502,7 @@ always @(*) begin
                     mstatus_data_o = (~rs1_data_i) & mstatus_data_i;
                 end
                 default: begin
-                    csr_write_en = 5'b00100;
+                    csr_write_en = 6'b000100;
                     exception_handle_flag = 1'b1;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
@@ -501,7 +516,7 @@ always @(*) begin
                 end
                 FUNC7_SFENCE: begin
                     // nop
-                    csr_write_en = 5'b00000;
+                    csr_write_en = 6'b000000;
                 end
                 FUNC7_E: begin
                     exception_handle_flag = 1'b1;
@@ -561,6 +576,9 @@ always @(*) begin
         end
         CSR_ADDR_MSTATUS: begin
             rs1_data_o = mstatus_data_i;
+        end
+        CSR_ADDR_SATP: begin
+            rs1_data_o = satp_data_i;
         end
         default: begin
             rs1_data_o = `ZERO_WORD;
