@@ -53,7 +53,53 @@ parameter FLASH_INIT_FILE = "/tmp/kernel.elf";    //Flash初始化文件，请�
 
 assign rxd = 1'b1; //idle state
 
+integer i = 0;//���ڼ���
+reg[31:0] fib_addr = 32'h80100000;
+reg[31:0] fib_bin[0:29];//fib�����ƴ��룬30��ָ�30*4word=120byte
+reg[31:0] read_addr = 32'h80100000;
+reg[31:0] read_len = 32'h00000078;
+
 initial begin 
+    //$readmemh("D:\\_projects\\vivadoProjects\\cod20-chengzl18\\thinpad_top.srcs\\sim_1\\newfib_hex.txt",fib_bin); 
+    //in Little-Endian
+    //###### User Program Assembly ######
+    //80100000 <_start>:
+    fib_bin[0]=32'h93621000;  //ori     t0,zero,1
+    // fib_bin[0]=32'h00106293;
+    fib_bin[1]=32'h13631000;  //ori     t1,zero,1
+    fib_bin[2]=32'h93644000;  //ori     s1,zero,4
+    fib_bin[3]=32'h370f4080;  //lui     t5,0x80400
+    fib_bin[4]=32'h130fcf7f;  //addi    t5,t5,2044 # 804007fc <__global_pointer$+0x2fef84>
+    fib_bin[5]=32'h37054080;  //lui     a0,0x80400
+    fib_bin[6]=32'h13050510;  //addi    a0,a0,256 # 80400100 <__global_pointer$+0x2fe888>
+    fib_bin[7]=32'hb3836200;  //add     t2,t0,t1
+    fib_bin[8]=32'h93620300;  //ori     t0,t1,0
+    fib_bin[9]=32'h13e30300;  //ori     t1,t2,0
+    fib_bin[10]=32'h23206500;  //sw      t1,0(a0)
+    fib_bin[11]=32'h33059500;  //add     a0,a0,s1
+    fib_bin[12]=32'h6304e501;  //beq     a0,t5,80100038 <check>
+    fib_bin[13]=32'he30400fe;  //beqz    zero,8010001c <_start+0x1c>
+    //80100038 <check>:
+    fib_bin[14]=32'h93621000;  //ori     t0,zero,1
+    fib_bin[15]=32'h13631000;  //ori     t1,zero,1
+    fib_bin[16]=32'h37054080;  //lui     a0,0x80400
+    fib_bin[17]=32'h13050510;  //addi    a0,a0,256 # 80400100 <__global_pointer$+0x2fe888>
+    fib_bin[18]=32'hb3836200;  //add     t2,t0,t1
+    fib_bin[19]=32'h93620300;  //ori     t0,t1,0
+    fib_bin[20]=32'h13e30300;  //ori     t1,t2,0
+    fib_bin[21]=32'h032e0500;  //lw      t3,0(a0)
+    fib_bin[22]=32'h6304c301;  //beq     t1,t3,80100060 <check+0x28>
+    fib_bin[23]=32'h630c0000;  //beqz    zero,80100074 <end>
+    fib_bin[24]=32'h33059500;  //add     a0,a0,s1
+    fib_bin[25]=32'h6304e501;  //beq     a0,t5,8010006c <succ>
+    fib_bin[26]=32'he30000fe;  //beqz    zero,80100048 <check+0x10>
+    //8010006c <succ>:
+    fib_bin[27]=32'h13635055;  //ori     t1,zero,1365
+    fib_bin[28]=32'h23206500;  //sw      t1,0(a0)
+    //80100074 <end>:
+    fib_bin[29]=32'h67800000;  //ret
+
+
     //在这里可以自定义测试输入序列，例如：
     dip_sw = 32'h2;
     touch_btn = 0;
@@ -67,9 +113,210 @@ initial begin
     //     clock_btn = 0; //松开手工时钟按钮
     // end
     // 模拟PC通过串口发送字符
-    cpld.pc_send_byte(8'h32);
-    #10000;
-    cpld.pc_send_byte(8'h33);
+    // cpld.pc_send_byte(8'h32);
+    // #10000;
+    // cpld.pc_send_byte(8'h33);
+
+    //XLEN
+    cpld.pc_send_byte(8'h57);
+    #1000;
+    for (i=0; i<30; i=i+1) begin
+        //OP_A
+        while (uart_dataready) begin
+            #1000;
+        end; 
+        cpld.pc_send_byte(8'h41);
+        #1000;
+
+        // 发送用户程序的写入地址 0x80100000，分成4部分发送
+        // 第 0 个字节
+        while (uart_dataready) begin
+            #1000;
+        end; 
+        cpld.pc_send_byte(fib_addr[7:0]);
+        #1000;
+
+        // 第 1 个字节
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(fib_addr[15:8]);
+        #1000;
+
+        // 第 2 个字节
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(fib_addr[23:16]);
+        #1000;
+
+        // 第 3 个字节
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(fib_addr[31:24]);
+        #1000;
+
+        //num=4，分成4部分发送
+        while (uart_dataready) begin
+            #1000;
+        end; 
+        cpld.pc_send_byte(8'h04);
+        #1000;
+
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(8'h00);
+        #1000;
+
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(8'h00);
+        #1000;
+
+        while (uart_dataready) begin
+            #1000;
+        end;
+        cpld.pc_send_byte(8'h00);
+        #1000;
+
+        // 读取一个字节
+        //�����ֽ�0
+        while (uart_dataready) begin
+            #1000;
+        end;
+        // cpld.pc_send_byte(fib_bin[i][7:0]);
+        cpld.pc_send_byte(fib_bin[i][31:24]);
+        #1000;
+
+        //�����ֽ�1
+        while (uart_dataready) begin
+            #1000;
+        end; 
+        // cpld.pc_send_byte(fib_bin[i][15:8]);
+        cpld.pc_send_byte(fib_bin[i][23:16]);
+        #1000;
+        
+        //�����ֽ�2
+        while (uart_dataready) begin
+            #1000;
+        end;
+        // cpld.pc_send_byte(fib_bin[i][23:16]);
+        cpld.pc_send_byte(fib_bin[i][15:8]);
+        #1000;
+        
+        //�����ֽ�3
+        while (uart_dataready) begin
+            #1000;
+        end; 
+        // cpld.pc_send_byte(fib_bin[i][31:24]);
+        cpld.pc_send_byte(fib_bin[i][7:0]);
+        #1000;
+
+        fib_addr = fib_addr+4;
+    end
+
+    //runD, 查看0x80100000开始的30 word的数据，也就是上面写入的用户程序代码
+    while (uart_dataready) begin
+            #1000;
+    end; 
+    cpld.pc_send_byte(8'h44);
+    #1000;
+
+    //��ַ�ֽ�0
+    while (uart_dataready) begin
+        #1000;
+    end; 
+    cpld.pc_send_byte(read_addr[7:0]);
+    #1000;
+
+    //��ַ�ֽ�1
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[15:8]);
+    #1000;
+
+    //��ַ�ֽ�2
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[23:16]);
+    #1000;
+
+    //��ַ�ֽ�3
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[31:24]);
+    #1000;
+
+    //�����ֽ�0
+    while (uart_dataready) begin
+        #1000;
+    end; 
+    cpld.pc_send_byte(read_len[7:0]);
+    #1000;
+
+    //�����ֽ�1
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_len[15:8]);
+    #1000;
+
+    //�����ֽ�2
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_len[23:16]);
+    #1000;
+
+    //�����ֽ�3
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_len[31:24]);
+    #1000;
+
+    //runG
+    // 执行0x80100000开始的用户程序
+    while (uart_dataready) begin
+            #1000;
+    end; 
+    cpld.pc_send_byte(8'h47);
+    #1000;
+
+    //��ַ�ֽ�0
+    while (uart_dataready) begin
+        #1000;
+    end; 
+    cpld.pc_send_byte(read_addr[7:0]);
+    #1000;
+
+    //��ַ�ֽ�1
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[15:8]);
+    #1000;
+
+    //��ַ�ֽ�2
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[23:16]);
+    #1000;
+
+    //��ַ�ֽ�3
+    while (uart_dataready) begin
+        #1000;
+    end;
+    cpld.pc_send_byte(read_addr[31:24]);
+    #1000000;
+    
 end
 
 // 待测试用户设计

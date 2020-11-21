@@ -44,5 +44,7 @@
 // PC相关
 `define PC_INIT_ADDR 32'h8000_0000 // PC起始加载地址
 
-// 指令操作码相关
-
+// 异常相关
+`define MODE_U 2'b00
+`define MODE_M 2'b11
+`define MODE_S 2'b01

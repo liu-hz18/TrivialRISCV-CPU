@@ -125,6 +125,8 @@ wire exception_recover_flag;
 wire[4:0] csr_write_en;
 wire[`RegBus] mepc_data_o_id;
 wire[`RegBus] mstatus_data_o_id;
+wire[`RegBus] mcause_data_o_id;
+wire[1:0] mode_cpu;
 
 // 连接CPU和EX模块
 wire[`RegBus] ex_result;
@@ -251,8 +253,10 @@ ctrl _id(  // 组合逻辑
     .mtvec_data_o(mtvec_data_o),
     .mscratch_data_o(mscratch_data_o),
     .mepc_data_o(mepc_data_o_id),
-    .mcause_data_o(mcause_data_o),
-    .mstatus_data_o(mstatus_data_o_id)
+    .mcause_data_o(mcause_data_o_id),
+    .mstatus_data_o(mstatus_data_o_id),
+
+    .mode_cpu(mode_cpu)
 );
 
 ex _ex(  // 组合逻辑
@@ -341,6 +345,7 @@ cpu _cpu(
     .csr_write_en_id_cpu(csr_write_en),
     .mepc_data_o_id(mepc_data_o_id),
     .mstatus_data_o_id(mstatus_data_o_id),
+    .mcause_data_o_id(mcause_data_o_id),
 
     .mepc_data_i(mepc_data_i),
     .mstatus_data_i(mstatus_data_i),
@@ -348,7 +353,10 @@ cpu _cpu(
 
     .csr_write_en(csr_write_en_cpu),
     .mepc_data_o(mepc_data_o),
-    .mstatus_data_o(mstatus_data_o)
+    .mstatus_data_o(mstatus_data_o),
+    .mcause_data_o(mcause_data_o),
+
+    .mode_cpu(mode_cpu)
 );
 
 endmodule

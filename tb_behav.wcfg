@@ -11,13 +11,13 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="79042120fs"></ZoomStartTime>
-      <ZoomEndTime time="80052827fs"></ZoomEndTime>
-      <Cursor1Time time="79672676fs"></Cursor1Time>
+      <ZoomStartTime time="1221708930fs"></ZoomStartTime>
+      <ZoomEndTime time="1223046174fs"></ZoomEndTime>
+      <Cursor1Time time="1223530794fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="175"></NameColumnWidth>
-      <ValueColumnWidth column_width="135"></ValueColumnWidth>
+      <ValueColumnWidth column_width="130"></ValueColumnWidth>
    </column_width_setting>
    <WVObjectSize size="63" />
    <wvobject fp_name="/tb/clk_50M" type="logic">
@@ -192,13 +192,13 @@
       <obj_property name="ElementShortName">pc[31:0]</obj_property>
       <obj_property name="ObjectShortName">pc[31:0]</obj_property>
    </wvobject>
-   <wvobject fp_name="/tb/dut/_cpu/ram_data_i" type="array">
-      <obj_property name="ElementShortName">ram_data_i[31:0]</obj_property>
-      <obj_property name="ObjectShortName">ram_data_i[31:0]</obj_property>
-   </wvobject>
    <wvobject fp_name="/tb/dut/_io_control/base_ram_we_n" type="logic">
       <obj_property name="ElementShortName">base_ram_we_n</obj_property>
       <obj_property name="ObjectShortName">base_ram_we_n</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb/dut/_cpu/ram_data_i" type="array">
+      <obj_property name="ElementShortName">ram_data_i[31:0]</obj_property>
+      <obj_property name="ObjectShortName">ram_data_i[31:0]</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/dut/_io_control/base_ram_ce_n" type="logic">
       <obj_property name="ElementShortName">base_ram_ce_n</obj_property>
