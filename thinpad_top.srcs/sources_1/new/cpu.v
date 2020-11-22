@@ -62,6 +62,7 @@ localparam STAGE_ID                = 5'b00010;
 localparam STAGE_EX                = 5'b00011;
 localparam STAGE_MEM_BEGIN         = 5'b00100;
 localparam STAGE_MEM_FINISH        = 5'b00101;
+localparam STAGE_SET_RD            = 5'b11001;
 localparam STAGE_WB                = 5'b00110;
 localparam STAGE_EXCEPTION_HANDLE  = 5'b00111;
 // 页表相关
@@ -79,8 +80,9 @@ localparam STAGE_MEM_PAGE_2_BEGIN  = 5'b10001;
 localparam STAGE_MEM_PAGE_2_FINISH = 5'b10010;
 localparam STAGE_MEM_PAGE_3_BEGIN  = 5'b10011;
 localparam STAGE_MEM_PAGE_3_FINISH = 5'b10100;
-
-//reg[`RegBus] temp_address;
+// TLB阶段
+localparam STAGE_IF_TLB_WRITE      = 5'b11000;
+localparam STAGE_MEM_TLB_WRITE     = 5'b10111;
 
 wire is_if_page = (mode_cpu == `MODE_U) & satp_data_i[31];    // 取指使用页表
 wire is_mem_page = (mode_cpu == `MODE_U) & satp_data_i[31]; // 访存使用页表
@@ -107,6 +109,13 @@ wire store_address_misalign = mem_write && access_fault;
 
 reg exception_handle_flag_cpu;
 
+// TLB相关
+reg[32:0] tlb_regs[0:127];
+wire[12:0] pc_tlb_vpn_prefix = pc[31:19];
+wire[6:0] pc_tlb_index = pc[18:12];
+wire[12:0] mem_tlb_vpn_prefix = ex_result_i[31:19];
+wire[6:0] mem_tlb_index = ex_result_i[18:12];
+
 always @(posedge clk) begin
     if (rst) begin
         {io_oen, io_wen, io_byte_en} <= 3'b110;
@@ -125,9 +134,15 @@ always @(posedge clk) begin
     end else begin
         case (state)
         STAGE_IDLE: begin
-            if (is_if_page) begin
-                address <= {satp_data_i[19:0], pc[31:22], 2'b00};
-                state <= STAGE_IF_PAGE_1_BEGIN;
+            if (is_if_page == 1'b1) begin
+                // tlb判断, 注意TLB表的项将来可能还会加长，以加入控制信息
+                if (tlb_regs[pc_tlb_index][32:20] == pc_tlb_vpn_prefix) begin
+                    address <= {tlb_regs[pc_tlb_index][19:0], pc[11:0]};
+                    state <= STAGE_IF_PAGE_3_BEGIN;
+                end else begin // tlb miss
+                    address <= {satp_data_i[19:0], pc[31:22], 2'b00};
+                    state <= STAGE_IF_PAGE_1_BEGIN;
+                end
             end else begin
                 address <= pc;
                 state <= STAGE_IF_BEGIN;
@@ -176,12 +191,16 @@ always @(posedge clk) begin
             io_oen <= 1'b0; // 读内存模式
             state <= STAGE_IF_PAGE_2_FINISH;
         end
-        STAGE_IF_PAGE_2_FINISH: begin
+        STAGE_IF_PAGE_2_FINISH: begin // 运行到这里说明TLB MISS
             if (done) begin
                 io_oen <= 1'b1;
                 address <= {ram_data_i[29:10], pc[11:0]};
-                state <= STAGE_IF_PAGE_3_BEGIN;
+                state <= STAGE_IF_TLB_WRITE;
             end
+        end
+        STAGE_IF_TLB_WRITE: begin
+            tlb_regs[pc_tlb_index] <= {pc_tlb_vpn_prefix, address[31:12]}; // 更新TLB
+            state <= STAGE_IF_PAGE_3_BEGIN;
         end
         STAGE_IF_PAGE_3_BEGIN: begin
             io_oen <= 1'b0; // 读内存模式
@@ -202,9 +221,15 @@ always @(posedge clk) begin
             if (exception_handle_flag_i == 1'b1) begin
                 state <= STAGE_EXCEPTION_HANDLE;
             end else begin
-                if (is_mem_page) begin
-                    address <= {satp_data_i[19:0], ex_result_i[31:22], 2'b00}; 
-                    state <= STAGE_MEM_PAGE_1_BEGIN;
+                if (is_mem_page == 1'b1) begin
+                    // tlb判断, 注意TLB表的项将来可能还会加长，以加入控制信息
+                    if (tlb_regs[mem_tlb_index][32:20] == mem_tlb_vpn_prefix) begin
+                        address <= {tlb_regs[mem_tlb_index][19:0], ex_result_i[11:0]};
+                        state <= STAGE_MEM_PAGE_3_BEGIN;
+                    end else begin // tlb miss
+                        address <= {satp_data_i[19:0], ex_result_i[31:22], 2'b00}; 
+                        state <= STAGE_MEM_PAGE_1_BEGIN;
+                    end
                 end else begin
                     address <= ex_result_i;
                     state <= STAGE_MEM_BEGIN;
@@ -259,12 +284,7 @@ always @(posedge clk) begin
                     io_byte_en <= mem_byte_en;
                     state <= STAGE_MEM_FINISH;
                 end else begin
-                    if (link_flag_i) begin
-                        rd_data_o <= pc + 4;
-                    end else begin
-                        rd_data_o <= ex_result_i;
-                    end
-                    state <= STAGE_WB;
+                    state <= STAGE_SET_RD;
                 end
             end
         end
@@ -279,12 +299,7 @@ always @(posedge clk) begin
         end
         STAGE_MEM_PAGE_1_BEGIN: begin
             if ((~mem_read) & (~mem_write)) begin
-                if (link_flag_i) begin
-                    rd_data_o <= pc + 4;
-                end else begin
-                    rd_data_o <= ex_result_i;
-                end
-                state <= STAGE_WB;
+                state <= STAGE_SET_RD;
             end else begin
                 io_oen <= 1'b0;
                 state <= STAGE_MEM_PAGE_1_FINISH;
@@ -305,18 +320,26 @@ always @(posedge clk) begin
             if (done) begin
                 io_oen <= 1'b1;
                 address <= {ram_data_i[29:10], ex_result_i[11:0]};
-                state <= STAGE_MEM_PAGE_3_BEGIN;
+                state <= STAGE_MEM_TLB_WRITE;
             end
+        end
+        STAGE_MEM_TLB_WRITE: begin
+            tlb_regs[mem_tlb_index] <= {mem_tlb_vpn_prefix, address[31:12]}; // 更新TLB
+            state <= STAGE_MEM_PAGE_3_BEGIN;
         end
         STAGE_MEM_PAGE_3_BEGIN: begin
             if (mem_read == 1'b1) begin
                 io_oen <= 1'b0;
-            end else begin
+                io_byte_en <= mem_byte_en;
+                state <= STAGE_MEM_PAGE_3_FINISH;
+            end else if (mem_write == 1'b1) begin
                 io_wen <= 1'b0;
                 ram_data_o <= rs2_data_i;
+                io_byte_en <= mem_byte_en;
+                state <= STAGE_MEM_PAGE_3_FINISH;
+            end else begin
+                state <= STAGE_SET_RD;
             end
-            io_byte_en <= mem_byte_en;
-            state <= STAGE_MEM_PAGE_3_FINISH;
         end
         STAGE_MEM_PAGE_3_FINISH: begin
             if (done) begin
@@ -326,6 +349,14 @@ always @(posedge clk) begin
                     rd_data_o <= ram_data_i; // 取出读到的值
                 end
             end
+        end
+        STAGE_SET_RD: begin
+            if (link_flag_i) begin
+                rd_data_o <= pc + 4;
+            end else begin
+                rd_data_o <= ex_result_i;
+            end
+            state <= STAGE_WB;
         end
         // 写回阶段完成通用寄存器和异常寄存器的写回
         STAGE_WB: begin

@@ -48,3 +48,11 @@
 `define MODE_U 2'b00
 `define MODE_M 2'b11
 `define MODE_S 2'b01
+
+// TLB相关
+`define TLB_INDEX_WIDTH 7
+`define TLB_VPN_PRE_WIDTH 13
+`define TLB_PPN_WIDTH 20
+`define TLB_INDEX 18:12 // 7bit, 128 items
+`define TLB_VPN_PRE 31:19 // 13bit
+`define PAGE_OFFSET 11:0 // 页内偏移
