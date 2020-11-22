@@ -35,10 +35,11 @@ module cpu(
     // 译码阶段给出的异常处理写入信息
     input wire exception_handle_flag_i,
     input wire exception_recover_flag_i,
-    input wire[5:0] csr_write_en_id_cpu,
+    input wire[6:0] csr_write_en_id_cpu,
     input wire[`RegBus] mepc_data_o_id,
     input wire[`RegBus] mstatus_data_o_id,
     input wire[`RegBus] mcause_data_o_id,
+    input wire[`RegBus] mtval_data_o_id,
 
     // 来自异常寄存器模块的数据
     input wire[`RegBus] mepc_data_i,
@@ -47,10 +48,11 @@ module cpu(
     input wire[`RegBus] satp_data_i,
 
     // 给异常寄存器模块的输入
-    output wire[5:0] csr_write_en,
+    output wire[6:0] csr_write_en,
     output reg[`RegBus] mepc_data_o,
     output reg[`RegBus] mstatus_data_o,
     output reg[`RegBus] mcause_data_o,
+    output reg[`RegBus] mtval_data_o,
 
     output reg[1:0] mode_cpu // 当前模式
 );
@@ -89,10 +91,10 @@ wire is_mem_page = (mode_cpu == `MODE_U) & satp_data_i[31]; // 访存使用页�
 
 reg[4:0] state;
 
-reg[5:0] csr_write_en_cpu;
+reg[6:0] csr_write_en_cpu;
 
 assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
-assign csr_write_en = (state == STAGE_WB) ? (csr_write_en_id_cpu | csr_write_en_cpu) : 6'b00_0000;
+assign csr_write_en = (state == STAGE_WB) ? (csr_write_en_id_cpu | csr_write_en_cpu) : 7'b000_0000;
 
 // 地址相关异常判断
 wire address_misalign = (ex_result_i < 32'h1000_0000 || (ex_result_i > 32'h1000_0005 && ex_result_i < 32'h8000_0000) || ex_result_i > 32'h807F_FFFF);
@@ -127,8 +129,10 @@ always @(posedge clk) begin
         ram_data_o <= `ZERO_WORD;
         mepc_data_o <= `ZERO_WORD;
         mstatus_data_o <= `ZERO_WORD;
+        mtval_data_o <= `ZERO_WORD;
+        mcause_data_o <= `ZERO_WORD;
         state <= STAGE_IDLE;
-        csr_write_en_cpu <= 6'b000000;
+        csr_write_en_cpu <= 7'b0000000;
         exception_handle_flag_cpu <= 1'b0;
         mode_cpu <= `MODE_M;
     end else begin
@@ -152,17 +156,21 @@ always @(posedge clk) begin
             pc_now <= pc;
             if (if_access_fault == 1'b1) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0001}; // 取指access fault, 1
                 state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
             end else if (if_address_misalign == 1'b1) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0000}; // 取指address misalign, 0
                 state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
             end else begin
                 io_oen <= 1'b0; // 读内存模式
-                csr_write_en_cpu <= 6'b000000;
+                csr_write_en_cpu <= 7'b0000000;
                 state <= STAGE_IF_FINISH;
                 exception_handle_flag_cpu <= 1'b0;
             end
@@ -176,7 +184,7 @@ always @(posedge clk) begin
         end
         STAGE_IF_PAGE_1_BEGIN: begin
             io_oen <= 1'b0; // 读内存模式
-            csr_write_en_cpu <= 6'b000000;
+            csr_write_en_cpu <= 7'b0000000;
             exception_handle_flag_cpu <= 1'b0;
             state <= STAGE_IF_PAGE_1_FINISH;
         end
@@ -238,6 +246,7 @@ always @(posedge clk) begin
             mepc_data_o <= mepc_data_o_id;
             mstatus_data_o <= mstatus_data_o_id;
             mcause_data_o <= mcause_data_o_id;
+            mtval_data_o <= mtval_data_o_id;
         end
         STAGE_EXCEPTION_HANDLE: begin
             if (exception_recover_flag_i == 1'b1) begin // mret
@@ -248,28 +257,36 @@ always @(posedge clk) begin
                 pc <= mtvec_data_i;
                 mstatus_data_o <= {mstatus_data_i[31:13], mode_cpu, mstatus_data_i[10:0]}; // M-mode
                 mode_cpu <= `MODE_M;
-                csr_write_en_cpu <= 6'b001001; // mepc, mstatus
+                csr_write_en_cpu <= 7'b0001001; // mepc, mstatus
             end
             state <= STAGE_WB;
         end
         STAGE_MEM_BEGIN: begin
             if (load_access_fault) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0101}; // load access fault, 5
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
             end else if (load_address_misalign && (~mem_byte_en)) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0100}; // load address misalign, 4
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
             end else if (store_access_fault) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0111}; // store access fault, 7
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
             end else if (store_address_misalign && (~mem_byte_en)) begin
                 csr_write_en_cpu[2] = 1'b1;
+                csr_write_en_cpu[6] = 1'b1;
+                mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0110}; // store address misalign, 6
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;

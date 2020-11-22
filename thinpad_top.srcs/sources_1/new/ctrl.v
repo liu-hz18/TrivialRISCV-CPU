@@ -49,14 +49,16 @@ module ctrl(
     input wire[`RegBus] mcause_data_i,
     input wire[`RegBus] mstatus_data_i,
     input wire[`RegBus] satp_data_i,
+    input wire[`RegBus] mtval_data_i,
     
-    output reg[5:0] csr_write_en,
+    output reg[6:0] csr_write_en,
     output reg[`RegBus] mtvec_data_o,
     output reg[`RegBus] mscratch_data_o,
     output reg[`RegBus] mepc_data_o,
     output reg[`RegBus] mcause_data_o,
     output reg[`RegBus] mstatus_data_o,
     output reg[`RegBus] satp_data_o,
+    output reg[`RegBus] mtval_data_o,
 
     input wire[1:0] mode_cpu
 );
@@ -120,6 +122,7 @@ localparam CSR_ADDR_MCAUSE= 12'h342;
 localparam CSR_ADDR_MSCRATCH=12'h340;
 localparam CSR_ADDR_MSTATUS=12'h300;
 localparam CSR_ADDR_SATP   = 12'h180;
+localparam CSR_ADDR_MTVAL  = 12'h343;
 
 reg csr_en;
 
@@ -159,6 +162,7 @@ always @(*) begin
         mcause_data_o = `ZERO_WORD;
         mstatus_data_o = `ZERO_WORD;
         satp_data_o = `ZERO_WORD;
+        mtval_data_o = `ZERO_WORD;
     end else begin
         {read_rs1, read_rs2} = 2'b00;
         rs1_addr = `ZERO_REG_ADDR;
@@ -172,7 +176,7 @@ always @(*) begin
         {mem_read, mem_write} = 2'b00;
         mem_byte_en = 1'b0;
         link_flag_o = 1'b0;
-        csr_write_en = 6'b00_0000;
+        csr_write_en = 7'b000_0000;
         csr_en = 1'b0;
         exception_handle_flag = 1'b0;
         exception_recover_flag = 1'b0;
@@ -182,6 +186,7 @@ always @(*) begin
         mcause_data_o = `ZERO_WORD;
         mstatus_data_o = `ZERO_WORD;
         satp_data_o = `ZERO_WORD;
+        mtval_data_o = `ZERO_WORD;
         case (inst_opcode)
         OPCODE_NOP: begin
             // nop
@@ -211,6 +216,8 @@ always @(*) begin
                     alu_op_o = `ALU_OP_NOP;
                     exception_handle_flag = 1'b1;
                     csr_write_en[2] = 1'b1;
+                    csr_write_en[6] = 1'b1;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase // case inst_func7
@@ -227,7 +234,9 @@ always @(*) begin
             default: begin
                 alu_op_o = `ALU_OP_NOP;
                 exception_handle_flag = 1'b1;
+                csr_write_en[6] = 1'b1;
                 csr_write_en[2] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase  // case inst_func3
@@ -261,7 +270,9 @@ always @(*) begin
                 end
                 default: begin
                     exception_handle_flag = 1'b1;
+                    csr_write_en[6] = 1'b1;
                     csr_write_en[2] = 1'b1;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase  // case inst_func7
@@ -271,7 +282,9 @@ always @(*) begin
             end
             default: begin
                 exception_handle_flag = 1'b1;
+                csr_write_en[6] = 1'b1;
                 csr_write_en[2] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase // case inst_func3
@@ -304,6 +317,8 @@ always @(*) begin
             default: begin
                 exception_handle_flag = 1'b1;
                 csr_write_en[2] = 1'b1;
+                csr_write_en[6] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase // case inst_func3
@@ -328,6 +343,8 @@ always @(*) begin
             default: begin  // blank here
                 exception_handle_flag = 1'b1;
                 csr_write_en[2] = 1'b1;
+                csr_write_en[6] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase // case inst_func3
@@ -352,6 +369,8 @@ always @(*) begin
             default: begin
                 exception_handle_flag = 1'b1;
                 csr_write_en[2] = 1'b1;
+                csr_write_en[6] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase // case inst_func3
@@ -410,6 +429,10 @@ always @(*) begin
                 // 写使能信号
                 write_reg = 1'b1;
                 case(inst_csr_addr)
+                CSR_ADDR_MTVAL: begin
+                    csr_write_en[6] = 1'b1;
+                    mtval_data_o = rs1_data_i;
+                end
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
                     satp_data_o = rs1_data_i;
@@ -436,7 +459,8 @@ always @(*) begin
                 end
                 default: begin
                     exception_handle_flag = 1'b1;
-                    csr_write_en = 5'b00100;
+                    csr_write_en = 7'b1000100;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase // case inst_csr_addr
@@ -445,6 +469,10 @@ always @(*) begin
                 // 写使能信号
                 write_reg = 1'b1;
                 case(inst_csr_addr)
+                CSR_ADDR_MTVAL: begin
+                    csr_write_en[6] = 1'b1;
+                    mtval_data_o = rs1_data_i | mtval_data_i;
+                end
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
                     satp_data_o = rs1_data_i | satp_data_i;
@@ -470,8 +498,9 @@ always @(*) begin
                     mstatus_data_o = rs1_data_i | mstatus_data_i;
                 end
                 default: begin
-                    csr_write_en = 6'b000100;
+                    csr_write_en = 7'b1000100;
                     exception_handle_flag = 1'b1;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase  // case inst_csr_addr
@@ -480,6 +509,10 @@ always @(*) begin
                 // 写使能信号
                 write_reg = 1'b1;
                 case(inst_csr_addr)
+                CSR_ADDR_MTVAL: begin
+                    csr_write_en[6] = 1'b1;
+                    mtval_data_o = (~rs1_data_i) & mtval_data_i;
+                end
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
                     satp_data_o = (~rs1_data_i) & satp_data_i;
@@ -505,8 +538,9 @@ always @(*) begin
                     mstatus_data_o = (~rs1_data_i) & mstatus_data_i;
                 end
                 default: begin
-                    csr_write_en = 6'b000100;
+                    csr_write_en = 7'b1000100;
                     exception_handle_flag = 1'b1;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase // case inst_csr_addr
@@ -521,7 +555,7 @@ always @(*) begin
                 FUNC7_SFENCE: begin
                     // nop
                     exception_handle_flag = 1'b0;
-                    csr_write_en = 6'b000000;
+                    csr_write_en = 7'b0000000;
                 end
                 FUNC7_E: begin
                     exception_handle_flag = 1'b1;
@@ -539,9 +573,10 @@ always @(*) begin
                     endcase // case inst_rs2
                 end
                 default: begin
-                    write_reg = 1'b0;
                     exception_handle_flag = 1'b1;
                     csr_write_en[2] = 1'b1;
+                    csr_write_en[6] = 1'b1;
+                    mtval_data_o = inst_i;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
                 end
                 endcase // case inst_func7
@@ -549,6 +584,8 @@ always @(*) begin
             default: begin
                 exception_handle_flag = 1'b1;
                 csr_write_en[2] = 1'b1;
+                csr_write_en[6] = 1'b1;
+                mtval_data_o = inst_i;
                 mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
             end
             endcase // case inst_func3
@@ -556,6 +593,8 @@ always @(*) begin
         default: begin
             exception_handle_flag = 1'b1;
             csr_write_en[2] = 1'b1;
+            csr_write_en[6] = 1'b1;
+            mtval_data_o = inst_i;
             mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2
         end
         endcase // case inst_opcode
@@ -585,6 +624,9 @@ always @(*) begin
         end
         CSR_ADDR_SATP: begin
             rs1_data_o = satp_data_i;
+        end
+        CSR_ADDR_MTVAL: begin
+            rs1_data_o = mtval_data_i;
         end
         default: begin
             rs1_data_o = `ZERO_WORD;

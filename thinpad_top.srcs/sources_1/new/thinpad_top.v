@@ -122,10 +122,11 @@ wire mem_write;
 wire mem_byte_en;
 wire exception_handle_flag;
 wire exception_recover_flag;
-wire[5:0] csr_write_en;
+wire[6:0] csr_write_en;
 wire[`RegBus] mepc_data_o_id;
 wire[`RegBus] mstatus_data_o_id;
 wire[`RegBus] mcause_data_o_id;
+wire[`RegBus] mtval_data_o_id;
 wire[1:0] mode_cpu;
 
 // 连接CPU和EX模块
@@ -166,6 +167,7 @@ wire[`RegBus] mepc_data_i;
 wire[`RegBus] mcause_data_i;
 wire[`RegBus] mstatus_data_i;
 wire[`RegBus] satp_data_i;
+wire[`RegBus] mtval_data_i;
 
 wire[`RegBus] mtvec_data_o;
 wire[`RegBus] mscratch_data_o;
@@ -173,8 +175,9 @@ wire[`RegBus] mepc_data_o;
 wire[`RegBus] mcause_data_o;
 wire[`RegBus] mstatus_data_o;
 wire[`RegBus] satp_data_o;
+wire[`RegBus] mtval_data_o;
 
-wire[5:0] csr_write_en_cpu;
+wire[6:0] csr_write_en_cpu;
 
 io_control _io_control(
     .clk(clk),
@@ -250,6 +253,7 @@ ctrl _id(  // 组合逻辑
     .mcause_data_i(mcause_data_i),
     .mstatus_data_i(mstatus_data_i),
     .satp_data_i(satp_data_i),
+    .mtval_data_i(mtval_data_i),
     
     .csr_write_en(csr_write_en),
 
@@ -259,6 +263,7 @@ ctrl _id(  // 组合逻辑
     .mcause_data_o(mcause_data_o_id),
     .mstatus_data_o(mstatus_data_o_id),
     .satp_data_o(satp_data_o),
+    .mtval_data_o(mtval_data_o_id),
 
     .mode_cpu(mode_cpu)
 );
@@ -305,13 +310,15 @@ csr_reg _csr_reg(
     .mcause_data_o(mcause_data_i),
     .mstatus_data_o(mstatus_data_i),
     .satp_data_o(satp_data_i),
+    .mtval_data_o(mtval_data_i),
     
     .mtvec_data_i(mtvec_data_o),
     .mscratch_data_i(mscratch_data_o),
     .mepc_data_i(mepc_data_o),
     .mcause_data_i(mcause_data_o),
     .mstatus_data_i(mstatus_data_o),
-    .satp_data_i(satp_data_o)
+    .satp_data_i(satp_data_o),
+    .mtval_data_i(mtval_data_o)
 );
 
 cpu _cpu(
@@ -352,6 +359,7 @@ cpu _cpu(
     .mepc_data_o_id(mepc_data_o_id),
     .mstatus_data_o_id(mstatus_data_o_id),
     .mcause_data_o_id(mcause_data_o_id),
+    .mtval_data_o_id(mtval_data_o_id),
 
     .mepc_data_i(mepc_data_i),
     .mstatus_data_i(mstatus_data_i),
@@ -362,6 +370,7 @@ cpu _cpu(
     .mepc_data_o(mepc_data_o),
     .mstatus_data_o(mstatus_data_o),
     .mcause_data_o(mcause_data_o),
+    .mtval_data_o(mtval_data_o),
 
     .mode_cpu(mode_cpu)
 );

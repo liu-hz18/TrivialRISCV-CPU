@@ -5,7 +5,7 @@ module csr_reg(
     input wire clk,
     input wire rst,
 
-    input wire[5:0] csr_write_en,
+    input wire[6:0] csr_write_en,
 
     output reg[`RegBus] mtvec_data_o,
     output reg[`RegBus] mscratch_data_o,
@@ -33,6 +33,15 @@ reg[`RegBus] mtval_reg;
 reg[`RegBus] satp_reg;
 
 // 写寄存器
+// mtval
+always @(posedge clk) begin
+    if (~rst) begin
+        if (csr_write_en[6]) begin
+            mtval_reg <= mtval_data_i;
+        end
+    end
+end
+
 // satp
 always @(posedge clk) begin
     if (~rst) begin
@@ -88,6 +97,15 @@ always @(posedge clk) begin
 end
 
 // 读寄存器
+// mtval
+always @(*) begin
+    if (rst) begin
+        mtval_data_o <= `ZERO_WORD;
+    end else begin
+        mtval_data_o <= mtval_reg;
+    end
+end
+
 // satp
 always @(*) begin
     if (rst) begin
