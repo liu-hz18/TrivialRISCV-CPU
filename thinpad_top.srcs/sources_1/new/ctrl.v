@@ -67,7 +67,6 @@ wire[6:0] inst_func7 = inst_i[31:25];
 wire[4:0] inst_rs1 = inst_i[19:15];
 wire[4:0] inst_rs2 = inst_i[24:20];
 wire[4:0] inst_rd = inst_i[11:7];
-
 wire[11:0] inst_csr_addr = inst_i[31:20];
 
 wire[9:0] op = {inst_i[14:12], inst_i[6:0]};
@@ -82,7 +81,6 @@ localparam OPCODE_S    = 7'b0100011;
 localparam OPCODE_L    = 7'b0000011;
 localparam OPCODE_R    = 7'b0110011;
 localparam OPCODE_I    = 7'b0010011;
-
 localparam OPCODE_CSRR = 7'b1110011; // 异常处理
 
 localparam FUNC3_ADD   = 3'b000;
@@ -185,6 +183,9 @@ always @(*) begin
         mstatus_data_o = `ZERO_WORD;
         satp_data_o = `ZERO_WORD;
         case (inst_opcode)
+        OPCODE_NOP: begin
+            // nop
+        end
         OPCODE_R: begin
             read_rs1 = 1'b1; // ??2个寄存器
             read_rs2 = 1'b1;
@@ -400,7 +401,6 @@ always @(*) begin
             rs1_addr = inst_i[19:15];
             read_rs1 = 1'b1; // ??1个寄存器
             rd_addr = inst_i[11:7];
-            write_reg = 1'b1;
             alu_sel_a_o = `ALU_SRCA_REGA; // 设置ALU输入来自PC和IMM
             alu_sel_b_o = `ALU_SRCB_IMM;
             imm_o = `ZERO_WORD;
@@ -408,6 +408,7 @@ always @(*) begin
             case (inst_func3)
             FUNC3_CSRRW: begin
                 // 写使能信号
+                write_reg = 1'b1;
                 case(inst_csr_addr)
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
@@ -442,6 +443,7 @@ always @(*) begin
             end
             FUNC3_CSRRS: begin
                 // 写使能信号
+                write_reg = 1'b1;
                 case(inst_csr_addr)
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
@@ -476,6 +478,7 @@ always @(*) begin
             end
             FUNC3_CSRRC: begin
                 // 写使能信号
+                write_reg = 1'b1;
                 case(inst_csr_addr)
                 CSR_ADDR_SATP: begin
                     csr_write_en[5] = 1'b1;
@@ -509,6 +512,7 @@ always @(*) begin
                 endcase // case inst_csr_addr
             end
             FUNC3_E: begin
+                write_reg = 1'b0;
                 case(inst_func7)
                 FUNC7_MRET: begin
                     exception_handle_flag = 1'b1;
@@ -516,6 +520,7 @@ always @(*) begin
                 end
                 FUNC7_SFENCE: begin
                     // nop
+                    exception_handle_flag = 1'b0;
                     csr_write_en = 6'b000000;
                 end
                 FUNC7_E: begin
@@ -534,6 +539,7 @@ always @(*) begin
                     endcase // case inst_rs2
                 end
                 default: begin
+                    write_reg = 1'b0;
                     exception_handle_flag = 1'b1;
                     csr_write_en[2] = 1'b1;
                     mcause_data_o = {1'b0, 31'b0010}; // 非法指令, 2

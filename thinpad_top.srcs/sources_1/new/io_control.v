@@ -60,7 +60,6 @@ assign done = (state == STATE_DONE);
 wire ram_or_uart = (address >= 32'h8000_0000);
 wire use_ext_ram_bus = address[22];  // 为 1 时选择ext_ram
 
-
 // RAM控制信号
 reg oe_sram_n, we_sram_n;
 

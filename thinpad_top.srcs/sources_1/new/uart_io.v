@@ -22,7 +22,7 @@ module uart_io(
 localparam STATE_IDLE          = 4'b0000;
 localparam STATE_READ_0        = 4'b0001;
 localparam STATE_READ_1        = 4'b0010;
-localparam STATE_READ_BLANK    = 4'b0011;
+localparam STATE_READ_BLANK_0  = 4'b0011;
 localparam STATE_WRITE_0       = 4'b0100;
 localparam STATE_WRITE_1       = 4'b0101;
 localparam STATE_WRITE_2       = 4'b0110;
@@ -30,6 +30,7 @@ localparam STATE_WRITE_3       = 4'b0111;
 localparam STATE_WRITE_BLANK_0 = 4'b1000;
 localparam STATE_WRITE_BLANK_1 = 4'b1001;
 localparam STATE_DONE          = 4'b1010;
+localparam STATE_READ_BLANK_1  = 4'b1011;
 
 reg[3:0] state; //4 bit
 assign done = (state == STATE_DONE);
@@ -38,6 +39,7 @@ always @(posedge clk or posedge rst) begin
     if (rst) begin
         { uart_rdn, uart_wrn } <= 2'b11;
         state <= STATE_IDLE;
+        data_out <= 8'b0000_0000;
     end
     else begin
         case (state)
@@ -53,10 +55,13 @@ always @(posedge clk or posedge rst) begin
             STATE_READ_0: begin // if语句配合状态机，实际上实现了忙等待
                 if (uart_dataready) begin
                     uart_rdn <= 1'b0; // 打开读使能， 实际上uart_rdn下降沿之后，下一个周期uart_dataready就变0了
-                    state <= STATE_READ_BLANK;
+                    state <= STATE_READ_BLANK_0;
                 end
             end
-            STATE_READ_BLANK: begin // 读串口也要插空拍，不然可能读不到数据
+            STATE_READ_BLANK_0: begin // 读串口也要插空拍，不然可能读不到数据
+                state <= STATE_READ_BLANK_1;
+            end
+            STATE_READ_BLANK_1: begin
                 state <= STATE_READ_1;
             end
             STATE_READ_1: begin

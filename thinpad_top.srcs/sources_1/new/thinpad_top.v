@@ -356,6 +356,7 @@ cpu _cpu(
     .mepc_data_i(mepc_data_i),
     .mstatus_data_i(mstatus_data_i),
     .mtvec_data_i(mtvec_data_i),
+    .satp_data_i(satp_data_i),
 
     .csr_write_en(csr_write_en_cpu),
     .mepc_data_o(mepc_data_o),

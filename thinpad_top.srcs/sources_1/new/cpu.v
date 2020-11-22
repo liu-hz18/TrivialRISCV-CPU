@@ -24,7 +24,7 @@ module cpu(
     output reg io_byte_en,
     output reg[`RegBus] ram_data_o,
     
-    output wire[`RegBus] address,
+    output reg[`RegBus] address,
     output wire write_reg_buf,
 
     output reg[`InstBus] inst,
@@ -40,10 +40,11 @@ module cpu(
     input wire[`RegBus] mstatus_data_o_id,
     input wire[`RegBus] mcause_data_o_id,
 
-    // 来自异常处理模块的数据
+    // 来自异常寄存器模块的数据
     input wire[`RegBus] mepc_data_i,
     input wire[`RegBus] mstatus_data_i,
     input wire[`RegBus] mtvec_data_i,
+    input wire[`RegBus] satp_data_i,
 
     // 给异常寄存器模块的输入
     output wire[5:0] csr_write_en,
@@ -54,31 +55,40 @@ module cpu(
     output reg[1:0] mode_cpu // 当前模式
 );
 
-localparam STAGE_IF_BEGIN = 5'b00000;
-localparam STAGE_IF_FINISH = 5'b00001;
-localparam STAGE_ID = 5'b00010;
-localparam STAGE_EX = 5'b00011;
-localparam STAGE_MEM_BEGIN = 5'b00100;
-localparam STAGE_MEM_FINISH = 5'b00101;
-localparam STAGE_WB = 5'b00110;
-localparam STAGE_EXCEPTION_HANDLE = 5'b00111;
+localparam STAGE_IDLE              = 5'b11111;
+localparam STAGE_IF_BEGIN          = 5'b00000;
+localparam STAGE_IF_FINISH         = 5'b00001;
+localparam STAGE_ID                = 5'b00010;
+localparam STAGE_EX                = 5'b00011;
+localparam STAGE_MEM_BEGIN         = 5'b00100;
+localparam STAGE_MEM_FINISH        = 5'b00101;
+localparam STAGE_WB                = 5'b00110;
+localparam STAGE_EXCEPTION_HANDLE  = 5'b00111;
 // 页表相关
-localparam STAGE_PAGE_1_BEGIN = 5'b01001;
-localparam STAGE_PAGE_1_FINISH = 5'b01010;
-localparam STAGE_PAGE_2_BEGIN = 5'b01011;
-localparam STAGE_PAGE_2_FINISH = 5'b01100;
+// 取指
+localparam STAGE_IF_PAGE_1_BEGIN   = 5'b01001;
+localparam STAGE_IF_PAGE_1_FINISH  = 5'b01010;
+localparam STAGE_IF_PAGE_2_BEGIN   = 5'b01011;
+localparam STAGE_IF_PAGE_2_FINISH  = 5'b01100;
+localparam STAGE_IF_PAGE_3_BEGIN   = 5'b01101;
+localparam STAGE_IF_PAGE_3_FINISH  = 5'b01110;
+// 访存
+localparam STAGE_MEM_PAGE_1_BEGIN  = 5'b01111;
+localparam STAGE_MEM_PAGE_1_FINISH = 5'b10000;
+localparam STAGE_MEM_PAGE_2_BEGIN  = 5'b10001;
+localparam STAGE_MEM_PAGE_2_FINISH = 5'b10010;
+localparam STAGE_MEM_PAGE_3_BEGIN  = 5'b10011;
+localparam STAGE_MEM_PAGE_3_FINISH = 5'b10100;
 
-localparam STAGE_IDLE = 5'b11111;
+//reg[`RegBus] temp_address;
 
-reg is_if_mem;
-wire is_if_page = is_if_mem & (mode_cpu == `MODE_U);    // 取指使用页表
-wire is_mem_page = (~is_if_mem) & (mode_cpu == `MODE_U); // 访存使用页表
+wire is_if_page = (mode_cpu == `MODE_U) & satp_data_i[31];    // 取指使用页表
+wire is_mem_page = (mode_cpu == `MODE_U) & satp_data_i[31]; // 访存使用页表
 
 reg[4:0] state;
 
 reg[5:0] csr_write_en_cpu;
 
-assign address = (state == STAGE_IF_BEGIN || state == STAGE_IF_FINISH) ? pc : ex_result_i; // SRAM地址
 assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
 assign csr_write_en = (state == STAGE_WB) ? (csr_write_en_id_cpu | csr_write_en_cpu) : 6'b00_0000;
 
@@ -101,19 +111,28 @@ always @(posedge clk) begin
     if (rst) begin
         {io_oen, io_wen, io_byte_en} <= 3'b110;
         pc <= `PC_INIT_ADDR;
+        address <= `ZERO_WORD;
         pc_now <= `PC_INIT_ADDR;
         inst <= `ZERO_WORD;
         rd_data_o <= `ZERO_WORD;
         ram_data_o <= `ZERO_WORD;
         mepc_data_o <= `ZERO_WORD;
         mstatus_data_o <= `ZERO_WORD;
-        state <= STAGE_IF_BEGIN;
+        state <= STAGE_IDLE;
         csr_write_en_cpu <= 6'b000000;
         exception_handle_flag_cpu <= 1'b0;
         mode_cpu <= `MODE_M;
-        is_if_mem <= 1'b1;
     end else begin
         case (state)
+        STAGE_IDLE: begin
+            if (is_if_page) begin
+                address <= {satp_data_i[19:0], pc[31:22], 2'b00};
+                state <= STAGE_IF_PAGE_1_BEGIN;
+            end else begin
+                address <= pc;
+                state <= STAGE_IF_BEGIN;
+            end
+        end
         STAGE_IF_BEGIN: begin
             pc_now <= pc;
             if (if_access_fault == 1'b1) begin
@@ -140,6 +159,41 @@ always @(posedge clk) begin
                 state <= STAGE_ID;
             end
         end
+        STAGE_IF_PAGE_1_BEGIN: begin
+            io_oen <= 1'b0; // 读内存模式
+            csr_write_en_cpu <= 6'b000000;
+            exception_handle_flag_cpu <= 1'b0;
+            state <= STAGE_IF_PAGE_1_FINISH;
+        end
+        STAGE_IF_PAGE_1_FINISH: begin
+            if (done) begin
+                io_oen <= 1'b1;
+                address <= {ram_data_i[29:10], pc[21:12], 2'b00};
+                state <= STAGE_IF_PAGE_2_BEGIN;
+            end
+        end
+        STAGE_IF_PAGE_2_BEGIN: begin
+            io_oen <= 1'b0; // 读内存模式
+            state <= STAGE_IF_PAGE_2_FINISH;
+        end
+        STAGE_IF_PAGE_2_FINISH: begin
+            if (done) begin
+                io_oen <= 1'b1;
+                address <= {ram_data_i[29:10], pc[11:0]};
+                state <= STAGE_IF_PAGE_3_BEGIN;
+            end
+        end
+        STAGE_IF_PAGE_3_BEGIN: begin
+            io_oen <= 1'b0; // 读内存模式
+            state <= STAGE_IF_PAGE_3_FINISH;
+        end
+        STAGE_IF_PAGE_3_FINISH: begin
+            if (done) begin
+                io_oen <= 1'b1;
+                inst <= ram_data_i; // 取出指令
+                state <= STAGE_ID;
+            end
+        end
         STAGE_ID: begin // 控制信息都在一个周期内给出
             state <= STAGE_EX;
         end
@@ -148,20 +202,25 @@ always @(posedge clk) begin
             if (exception_handle_flag_i == 1'b1) begin
                 state <= STAGE_EXCEPTION_HANDLE;
             end else begin
-                state <= STAGE_MEM_BEGIN;
-            end 
+                if (is_mem_page) begin
+                    address <= {satp_data_i[19:0], ex_result_i[31:22], 2'b00}; 
+                    state <= STAGE_MEM_PAGE_1_BEGIN;
+                end else begin
+                    address <= ex_result_i;
+                    state <= STAGE_MEM_BEGIN;
+                end
+            end
             mepc_data_o <= mepc_data_o_id;
             mstatus_data_o <= mstatus_data_o_id;
             mcause_data_o <= mcause_data_o_id;
-            is_if_mem <= 1'b0;
         end
         STAGE_EXCEPTION_HANDLE: begin
             if (exception_recover_flag_i == 1'b1) begin // mret
                 pc <= mepc_data_i;
                 mode_cpu <= mstatus_data_i[12:11]; // U-mode
             end else begin // ebreak, ecall
-                pc <= mtvec_data_i;
                 mepc_data_o <= pc;
+                pc <= mtvec_data_i;
                 mstatus_data_o <= {mstatus_data_i[31:13], mode_cpu, mstatus_data_i[10:0]}; // M-mode
                 mode_cpu <= `MODE_M;
                 csr_write_en_cpu <= 6'b001001; // mepc, mstatus
@@ -192,16 +251,12 @@ always @(posedge clk) begin
             end else begin
                 if (mem_read == 1'b1) begin
                     io_oen <= 1'b0;
-                    if (mem_byte_en) begin
-                        io_byte_en <= 1'b1;
-                    end
+                    io_byte_en <= mem_byte_en;
                     state <= STAGE_MEM_FINISH;
                 end else if (mem_write == 1'b1) begin
                     io_wen <= 1'b0;
                     ram_data_o <= rs2_data_i;
-                    if (mem_byte_en) begin
-                        io_byte_en <= 1'b1;
-                    end
+                    io_byte_en <= mem_byte_en;
                     state <= STAGE_MEM_FINISH;
                 end else begin
                     if (link_flag_i) begin
@@ -222,6 +277,56 @@ always @(posedge clk) begin
                 end
             end
         end
+        STAGE_MEM_PAGE_1_BEGIN: begin
+            if ((~mem_read) & (~mem_write)) begin
+                if (link_flag_i) begin
+                    rd_data_o <= pc + 4;
+                end else begin
+                    rd_data_o <= ex_result_i;
+                end
+                state <= STAGE_WB;
+            end else begin
+                io_oen <= 1'b0;
+                state <= STAGE_MEM_PAGE_1_FINISH;
+            end
+        end
+        STAGE_MEM_PAGE_1_FINISH: begin
+            if (done) begin
+                io_oen <= 1'b1;
+                address <= {ram_data_i[29:10], ex_result_i[21:12], 2'b00}; 
+                state <= STAGE_MEM_PAGE_2_BEGIN;
+            end
+        end
+        STAGE_MEM_PAGE_2_BEGIN: begin
+            io_oen <= 1'b0;
+            state <= STAGE_MEM_PAGE_2_FINISH;
+        end
+        STAGE_MEM_PAGE_2_FINISH: begin
+            if (done) begin
+                io_oen <= 1'b1;
+                address <= {ram_data_i[29:10], ex_result_i[11:0]};
+                state <= STAGE_MEM_PAGE_3_BEGIN;
+            end
+        end
+        STAGE_MEM_PAGE_3_BEGIN: begin
+            if (mem_read == 1'b1) begin
+                io_oen <= 1'b0;
+            end else begin
+                io_wen <= 1'b0;
+                ram_data_o <= rs2_data_i;
+            end
+            io_byte_en <= mem_byte_en;
+            state <= STAGE_MEM_PAGE_3_FINISH;
+        end
+        STAGE_MEM_PAGE_3_FINISH: begin
+            if (done) begin
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
+                state <= STAGE_WB;
+                if (mem_read) begin
+                    rd_data_o <= ram_data_i; // 取出读到的值
+                end
+            end
+        end
         // 写回阶段完成通用寄存器和异常寄存器的写回
         STAGE_WB: begin
             if (branch_flag_i == 1'b1 && exception_handle_flag_i == 1'b0) begin // 更新PC
@@ -229,8 +334,7 @@ always @(posedge clk) begin
             end else if (exception_handle_flag_i == 1'b0 && exception_handle_flag_cpu == 1'b0) begin
                 pc <= pc + 4;
             end
-            is_if_mem <= 1'b1;
-            state <= STAGE_IF_BEGIN;
+            state <= STAGE_IDLE;
         end
         endcase
     end

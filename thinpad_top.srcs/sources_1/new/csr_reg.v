@@ -13,12 +13,14 @@ module csr_reg(
     output reg[`RegBus] mcause_data_o,
     output reg[`RegBus] mstatus_data_o,
     output reg[`RegBus] satp_data_o,
+    output reg[`RegBus] mtval_data_o,
 
     input wire[`RegBus] mtvec_data_i,
     input wire[`RegBus] mscratch_data_i,
     input wire[`RegBus] mepc_data_i,
     input wire[`RegBus] mcause_data_i,
     input wire[`RegBus] mstatus_data_i,
+    input wire[`RegBus] mtval_data_i,
     input wire[`RegBus] satp_data_i
 );
 
@@ -27,6 +29,7 @@ reg[`RegBus] mscratch_reg;
 reg[`RegBus] mepc_reg;
 reg[`RegBus] mcause_reg;
 reg[`RegBus] mstatus_reg;
+reg[`RegBus] mtval_reg;
 reg[`RegBus] satp_reg;
 
 // 写寄存器
