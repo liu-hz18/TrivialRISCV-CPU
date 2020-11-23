@@ -31,11 +31,14 @@ localparam STATE_WRITE_BLANK_0 = 4'b1000;
 localparam STATE_WRITE_BLANK_1 = 4'b1001;
 localparam STATE_DONE          = 4'b1010;
 localparam STATE_READ_BLANK_1  = 4'b1011;
+localparam STATE_READ_BLANK_2  = 4'b1101;
+localparam STATE_WRITE_BLANK_2 = 4'b1100;
+localparam STATE_WRITE_BLANK_3 = 4'b1110;
 
 reg[3:0] state; //4 bit
 assign done = (state == STATE_DONE);
 
-always @(posedge clk or posedge rst) begin
+always @(posedge clk) begin
     if (rst) begin
         { uart_rdn, uart_wrn } <= 2'b11;
         state <= STATE_IDLE;
@@ -45,11 +48,20 @@ always @(posedge clk or posedge rst) begin
         case (state)
             STATE_IDLE: begin
                 if (~oen) begin //可以从串口读数据了
-                    state <= STATE_READ_0;
+                    //state <= STATE_READ_0;
+                    if (uart_dataready) begin
+                        uart_rdn <= 1'b0; // 打开读使能， 实际上uart_rdn下降沿之后，下一个周期uart_dataready就变0了
+                        state <= STATE_READ_BLANK_0;
+                    end else begin
+                        uart_rdn <= 1'b1; // 打开读使能， 实际上uart_rdn下降沿之后，下一个周期uart_dataready就变0了
+                        state <= STATE_IDLE;
+                    end
                 end
                 else if (~wen) begin //往串口写数据
                     //data_out <= data_in;
-                    state <= STATE_WRITE_0;
+                    //state <= STATE_WRITE_0;
+                    uart_wrn <= 1'b0; // 写使能打开
+                    state <= STATE_WRITE_BLANK_0;
                 end
             end
             STATE_READ_0: begin // if语句配合状态机，实际上实现了忙等待
@@ -73,10 +85,13 @@ always @(posedge clk or posedge rst) begin
                 uart_wrn <= 1'b0; // 写使能打开
                 state <= STATE_WRITE_BLANK_0;
             end
-            STATE_WRITE_BLANK_0: begin // 写串口，插入2个空拍
+            STATE_WRITE_BLANK_0: begin // 写串口，插入个空拍
                 state <= STATE_WRITE_BLANK_1;
             end
             STATE_WRITE_BLANK_1: begin
+                state <= STATE_WRITE_BLANK_2;
+            end
+            STATE_WRITE_BLANK_2: begin
                 state <= STATE_WRITE_1;
             end
             STATE_WRITE_1: begin

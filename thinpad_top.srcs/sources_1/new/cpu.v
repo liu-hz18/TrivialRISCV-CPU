@@ -97,26 +97,33 @@ assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
 assign csr_write_en = (state == STAGE_WB) ? (csr_write_en_id_cpu | csr_write_en_cpu) : 7'b000_0000;
 
 // 地址相关异常判断
-wire address_misalign = (ex_result_i < 32'h1000_0000 || (ex_result_i > 32'h1000_0005 && ex_result_i < 32'h8000_0000) || ex_result_i > 32'h807F_FFFF);
+wire address_misalign = is_mem_page ? ((ex_result_i > 32'h002f_ffff && ex_result_i < 32'h7fc1_0000) || (ex_result_i > 32'h8000_0fff && ex_result_i < 32'h8010_0000) || (ex_result_i > 32'h8010_0fff)) : (ex_result_i < 32'h1000_0000 || (ex_result_i > 32'h1000_0005 && ex_result_i < 32'h8000_0000) || ex_result_i > 32'h807F_FFFF);
 wire access_fault = ex_result_i[1:0] != 2'b00;
 
-wire if_access_fault = (pc < 32'h8000_0000 || pc > 32'h807F_FFFF);
+wire if_access_fault = is_if_page ? ((pc > 32'h002f_ffff && pc < 32'h7fc1_0000) || (pc > 32'h8000_0fff && pc < 32'h8010_0000) || (pc > 32'h8010_0fff)) : (pc < 32'h8000_0000 || pc > 32'h807F_FFFF);
 wire if_address_misalign = pc[1:0] != 2'b00;
 
 wire load_access_fault = mem_read && address_misalign;
-wire load_address_misalign = mem_read && access_fault;
+wire load_address_misalign = mem_read && access_fault && (~mem_byte_en);
 
 wire store_access_fault = mem_write && address_misalign;
-wire store_address_misalign = mem_write && access_fault;
+wire store_address_misalign = mem_write && access_fault && (~mem_byte_en);
 
 reg exception_handle_flag_cpu;
 
 // TLB相关
-reg[32:0] tlb_regs[0:127];
+// 36 --- 24 | 23 -- 4 | 3 2 1 0
+// VPN0(13)  | PPN(20) | X W R V
+reg[36:0] tlb_regs[0:127]; // 加4bit, 代表X, W, R, V
 wire[12:0] pc_tlb_vpn_prefix = pc[31:19];
 wire[6:0] pc_tlb_index = pc[18:12];
+wire[11:0] pc_page_offset = pc[11:0];
 wire[12:0] mem_tlb_vpn_prefix = ex_result_i[31:19];
 wire[6:0] mem_tlb_index = ex_result_i[18:12];
+wire[11:0] mem_page_offset = ex_result_i[11:0];
+
+wire[36:0] tlb_vpn_prefix_pc_select = tlb_regs[pc_tlb_index];
+wire[36:0] tlb_vpn_prefix_mem_select = tlb_regs[mem_tlb_index];
 
 always @(posedge clk) begin
     if (rst) begin
@@ -135,44 +142,53 @@ always @(posedge clk) begin
         csr_write_en_cpu <= 7'b0000000;
         exception_handle_flag_cpu <= 1'b0;
         mode_cpu <= `MODE_M;
+        tlb_regs[7'b0010000] <= {13'b0111_1111_1100_0, 20'b1000_0000_0100_0000_0000, 4'b0111};
     end else begin
         case (state)
         STAGE_IDLE: begin
-            if (is_if_page == 1'b1) begin
-                // tlb判断, 注意TLB表的项将来可能还会加长，以加入控制信息
-                if (tlb_regs[pc_tlb_index][32:20] == pc_tlb_vpn_prefix) begin
-                    address <= {tlb_regs[pc_tlb_index][19:0], pc[11:0]};
-                    state <= STAGE_IF_PAGE_3_BEGIN;
-                end else begin // tlb miss
-                    address <= {satp_data_i[19:0], pc[31:22], 2'b00};
-                    state <= STAGE_IF_PAGE_1_BEGIN;
-                end
-            end else begin
-                address <= pc;
-                state <= STAGE_IF_BEGIN;
-            end
-        end
-        STAGE_IF_BEGIN: begin
-            pc_now <= pc;
-            if (if_access_fault == 1'b1) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+            if (if_access_fault == 1'b1) begin // 地址越界
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0001}; // 取指access fault, 1
                 state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
-            end else if (if_address_misalign == 1'b1) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+            end else if (if_address_misalign == 1'b1) begin // 地址不对齐
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0000}; // 取指address misalign, 0
                 state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
-            end else begin
+            end else if (is_if_page == 1'b1) begin // U-mode, use paging
+                // tlb hit 判断
+                if (tlb_vpn_prefix_pc_select[36:24] == pc_tlb_vpn_prefix) begin // tlb hit
+                    if (tlb_vpn_prefix_pc_select[0] && tlb_vpn_prefix_pc_select[1] && tlb_vpn_prefix_pc_select[3]) begin // V, X, R valid
+                        address <= {tlb_vpn_prefix_pc_select[23:4], pc_page_offset};
+                        io_oen <= 1'b0; // 读内存模式
+                        state <= STAGE_IF_PAGE_3_FINISH;
+                    end else begin // TLB V flag error
+                        csr_write_en_cpu[2] <= 1'b1;
+                        csr_write_en_cpu[6] <= 1'b1;
+                        mtval_data_o <= pc;
+                        mcause_data_o <= {1'b0, 31'b1100}; // instruction page fault, 12
+                        exception_handle_flag_cpu <= 1'b1;
+                        state <= STAGE_EXCEPTION_HANDLE;
+                    end
+                end else begin // tlb miss
+                    address <= {satp_data_i[19:0], pc[31:22], 2'b00};
+                    io_oen <= 1'b0; // 读内存模式
+                    csr_write_en_cpu <= 7'b0000000;
+                    exception_handle_flag_cpu <= 1'b0;
+                    state <= STAGE_IF_PAGE_1_FINISH;
+                end
+            end else begin // M-mode, no paging
+                address <= pc;
+                pc_now <= pc;
                 io_oen <= 1'b0; // 读内存模式
                 csr_write_en_cpu <= 7'b0000000;
-                state <= STAGE_IF_FINISH;
                 exception_handle_flag_cpu <= 1'b0;
+                state <= STAGE_IF_FINISH;
             end
         end
         STAGE_IF_FINISH: begin
@@ -182,17 +198,20 @@ always @(posedge clk) begin
                 state <= STAGE_ID;
             end
         end
-        STAGE_IF_PAGE_1_BEGIN: begin
-            io_oen <= 1'b0; // 读内存模式
-            csr_write_en_cpu <= 7'b0000000;
-            exception_handle_flag_cpu <= 1'b0;
-            state <= STAGE_IF_PAGE_1_FINISH;
-        end
         STAGE_IF_PAGE_1_FINISH: begin
             if (done) begin
-                io_oen <= 1'b1;
-                address <= {ram_data_i[29:10], pc[21:12], 2'b00};
-                state <= STAGE_IF_PAGE_2_BEGIN;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
+                if (ram_data_i[0]) begin // V valid
+                    address <= {ram_data_i[29:10], pc[21:12], 2'b00};
+                    state <= STAGE_IF_PAGE_2_BEGIN;
+                end else begin // V error
+                    csr_write_en_cpu[2] <= 1'b1;
+                    csr_write_en_cpu[6] <= 1'b1;
+                    mtval_data_o <= pc;
+                    mcause_data_o <= {1'b0, 31'b1100}; // instruction page fault, 12
+                    exception_handle_flag_cpu <= 1'b1;
+                    state <= STAGE_EXCEPTION_HANDLE;
+                end
             end
         end
         STAGE_IF_PAGE_2_BEGIN: begin
@@ -201,14 +220,20 @@ always @(posedge clk) begin
         end
         STAGE_IF_PAGE_2_FINISH: begin // 运行到这里说明TLB MISS
             if (done) begin
-                io_oen <= 1'b1;
-                address <= {ram_data_i[29:10], pc[11:0]};
-                state <= STAGE_IF_TLB_WRITE;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
+                if (ram_data_i[0] && ram_data_i[1] && ram_data_i[3]) begin // V, X, R valid
+                    address <= {ram_data_i[29:10], pc[11:0]};
+                    tlb_regs[pc_tlb_index] <= {pc_tlb_vpn_prefix, ram_data_i[29:10], ram_data_i[3:0]}; // 更新TLB, 记录标志位
+                    state <= STAGE_IF_PAGE_3_BEGIN;
+                end else begin
+                    csr_write_en_cpu[2] <= 1'b1;
+                    csr_write_en_cpu[6] <= 1'b1;
+                    mtval_data_o <= pc;
+                    mcause_data_o <= {1'b0, 31'b1100}; // instruction page fault, 12
+                    exception_handle_flag_cpu <= 1'b1;
+                    state <= STAGE_EXCEPTION_HANDLE;
+                end
             end
-        end
-        STAGE_IF_TLB_WRITE: begin
-            tlb_regs[pc_tlb_index] <= {pc_tlb_vpn_prefix, address[31:12]}; // 更新TLB
-            state <= STAGE_IF_PAGE_3_BEGIN;
         end
         STAGE_IF_PAGE_3_BEGIN: begin
             io_oen <= 1'b0; // 读内存模式
@@ -216,7 +241,7 @@ always @(posedge clk) begin
         end
         STAGE_IF_PAGE_3_FINISH: begin
             if (done) begin
-                io_oen <= 1'b1;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
                 inst <= ram_data_i; // 取出指令
                 state <= STAGE_ID;
             end
@@ -229,24 +254,12 @@ always @(posedge clk) begin
             if (exception_handle_flag_i == 1'b1) begin
                 state <= STAGE_EXCEPTION_HANDLE;
             end else begin
-                if (is_mem_page == 1'b1) begin
-                    // tlb判断, 注意TLB表的项将来可能还会加长，以加入控制信息
-                    if (tlb_regs[mem_tlb_index][32:20] == mem_tlb_vpn_prefix) begin
-                        address <= {tlb_regs[mem_tlb_index][19:0], ex_result_i[11:0]};
-                        state <= STAGE_MEM_PAGE_3_BEGIN;
-                    end else begin // tlb miss
-                        address <= {satp_data_i[19:0], ex_result_i[31:22], 2'b00}; 
-                        state <= STAGE_MEM_PAGE_1_BEGIN;
-                    end
-                end else begin
-                    address <= ex_result_i;
-                    state <= STAGE_MEM_BEGIN;
-                end
+                state <= STAGE_MEM_BEGIN;
             end
-            mepc_data_o <= mepc_data_o_id;
-            mstatus_data_o <= mstatus_data_o_id;
             mcause_data_o <= mcause_data_o_id;
             mtval_data_o <= mtval_data_o_id;
+            mepc_data_o <= mepc_data_o_id;
+            mstatus_data_o <= mstatus_data_o_id;
         end
         STAGE_EXCEPTION_HANDLE: begin
             if (exception_recover_flag_i == 1'b1) begin // mret
@@ -257,52 +270,79 @@ always @(posedge clk) begin
                 pc <= mtvec_data_i;
                 mstatus_data_o <= {mstatus_data_i[31:13], mode_cpu, mstatus_data_i[10:0]}; // M-mode
                 mode_cpu <= `MODE_M;
-                csr_write_en_cpu <= 7'b0001001; // mepc, mstatus
+                csr_write_en_cpu[3] <= 1'b1;
+                csr_write_en_cpu[0] <= 1'b1;
             end
             state <= STAGE_WB;
         end
         STAGE_MEM_BEGIN: begin
-            if (load_access_fault) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+            if ((~mem_read) & (~mem_write)) begin // 直接跳到写回
+                state <= STAGE_SET_RD;
+            end else if (load_access_fault) begin // 判断地址相关异常
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0101}; // load access fault, 5
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
-            end else if (load_address_misalign && (~mem_byte_en)) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+            end else if (load_address_misalign) begin
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0100}; // load address misalign, 4
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
             end else if (store_access_fault) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0111}; // store access fault, 7
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
-            end else if (store_address_misalign && (~mem_byte_en)) begin
-                csr_write_en_cpu[2] = 1'b1;
-                csr_write_en_cpu[6] = 1'b1;
+            end else if (store_address_misalign) begin
+                csr_write_en_cpu[2] <= 1'b1;
+                csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= ex_result_i;
                 mcause_data_o <= {1'b0, 31'b0110}; // store address misalign, 6
                 exception_handle_flag_cpu <= 1'b1;
                 state <= STAGE_EXCEPTION_HANDLE;
-            end else begin
+            end else if (is_mem_page == 1'b1) begin // 使用页表
+                // tlb hit 判断
+                if (tlb_vpn_prefix_mem_select[36:24] == mem_tlb_vpn_prefix) begin
+                    //tlb_vpn_prefix_mem_select[0] && ((tlb_vpn_prefix_mem_select[2] && mem_write) || (tlb_vpn_prefix_mem_select[1] && mem_read))
+                    if (tlb_vpn_prefix_mem_select[0] && ((tlb_vpn_prefix_mem_select[2] && mem_write) || (tlb_vpn_prefix_mem_select[1] && mem_read))) begin // V, W, R valid
+                        address <= {tlb_vpn_prefix_mem_select[23:4], mem_page_offset};
+                        if (mem_read == 1'b1) begin
+                            io_oen <= 1'b0;
+                        end else begin
+                            io_wen <= 1'b0;
+                            ram_data_o <= rs2_data_i;
+                        end
+                        io_byte_en <= mem_byte_en;
+                        state <= STAGE_MEM_PAGE_3_FINISH;
+                    end else begin
+                        csr_write_en_cpu[2] <= 1'b1;
+                        csr_write_en_cpu[6] <= 1'b1;
+                        mtval_data_o <= ex_result_i;
+                        mcause_data_o <= mem_read ? {1'b0, 31'b1101} : {1'b0, 31'b1111}; // load/store page fault, 13
+                        exception_handle_flag_cpu <= 1'b1;
+                        state <= STAGE_EXCEPTION_HANDLE;
+                    end
+                end else begin // tlb miss
+                    address <= {satp_data_i[19:0], ex_result_i[31:22], 2'b00}; 
+                    io_oen <= 1'b0;
+                    state <= STAGE_MEM_PAGE_1_FINISH;
+                end
+            end else begin // 不使用页表
+                address <= ex_result_i;
+                io_byte_en <= mem_byte_en;
                 if (mem_read == 1'b1) begin
                     io_oen <= 1'b0;
-                    io_byte_en <= mem_byte_en;
-                    state <= STAGE_MEM_FINISH;
-                end else if (mem_write == 1'b1) begin
+                end else begin
                     io_wen <= 1'b0;
                     ram_data_o <= rs2_data_i;
-                    io_byte_en <= mem_byte_en;
-                    state <= STAGE_MEM_FINISH;
-                end else begin
-                    state <= STAGE_SET_RD;
                 end
+                state <= STAGE_MEM_FINISH;
             end
         end
         STAGE_MEM_FINISH: begin
@@ -314,19 +354,20 @@ always @(posedge clk) begin
                 end
             end
         end
-        STAGE_MEM_PAGE_1_BEGIN: begin
-            if ((~mem_read) & (~mem_write)) begin
-                state <= STAGE_SET_RD;
-            end else begin
-                io_oen <= 1'b0;
-                state <= STAGE_MEM_PAGE_1_FINISH;
-            end
-        end
         STAGE_MEM_PAGE_1_FINISH: begin
             if (done) begin
-                io_oen <= 1'b1;
-                address <= {ram_data_i[29:10], ex_result_i[21:12], 2'b00}; 
-                state <= STAGE_MEM_PAGE_2_BEGIN;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
+                if (ram_data_i[0]) begin // V, W, R valid
+                    address <= {ram_data_i[29:10], ex_result_i[21:12], 2'b00}; 
+                    state <= STAGE_MEM_PAGE_2_BEGIN;
+                end else begin
+                    csr_write_en_cpu[2] <= 1'b1;
+                    csr_write_en_cpu[6] <= 1'b1;
+                    mtval_data_o <= ex_result_i;
+                    mcause_data_o <= mem_read ? {1'b0, 31'b1101} : {1'b0, 31'b1111}; // load/store page fault, 13/15
+                    state <= STAGE_EXCEPTION_HANDLE;
+                    exception_handle_flag_cpu <= 1'b1;
+                end
             end
         end
         STAGE_MEM_PAGE_2_BEGIN: begin
@@ -335,27 +376,26 @@ always @(posedge clk) begin
         end
         STAGE_MEM_PAGE_2_FINISH: begin
             if (done) begin
-                io_oen <= 1'b1;
-                address <= {ram_data_i[29:10], ex_result_i[11:0]};
-                state <= STAGE_MEM_TLB_WRITE;
-            end
-        end
-        STAGE_MEM_TLB_WRITE: begin
-            tlb_regs[mem_tlb_index] <= {mem_tlb_vpn_prefix, address[31:12]}; // 更新TLB
-            state <= STAGE_MEM_PAGE_3_BEGIN;
-        end
-        STAGE_MEM_PAGE_3_BEGIN: begin
-            if (mem_read == 1'b1) begin
-                io_oen <= 1'b0;
-                io_byte_en <= mem_byte_en;
-                state <= STAGE_MEM_PAGE_3_FINISH;
-            end else if (mem_write == 1'b1) begin
-                io_wen <= 1'b0;
-                ram_data_o <= rs2_data_i;
-                io_byte_en <= mem_byte_en;
-                state <= STAGE_MEM_PAGE_3_FINISH;
-            end else begin
-                state <= STAGE_SET_RD;
+                {io_oen, io_wen, io_byte_en} <= 3'b110;
+                if (ram_data_i[0] && ((ram_data_i[2] && mem_write) || (ram_data_i[1] && mem_read))) begin // V, W, R valid
+                    address <= {ram_data_i[29:10], ex_result_i[11:0]};
+                    tlb_regs[mem_tlb_index] <= {mem_tlb_vpn_prefix, ram_data_i[29:10], ram_data_i[3:0]}; // 更新TLB
+                    io_byte_en <= mem_byte_en;
+                    if (mem_read == 1'b1) begin
+                        io_oen <= 1'b0;
+                    end else begin
+                        io_wen <= 1'b0;
+                        ram_data_o <= rs2_data_i;
+                    end
+                    state <= STAGE_MEM_PAGE_3_FINISH;
+                end else begin
+                    csr_write_en_cpu[2] <= 1'b1;
+                    csr_write_en_cpu[6] <= 1'b1;
+                    mtval_data_o <= ex_result_i;
+                    mcause_data_o <= mem_read ? {1'b0, 31'b1101} : {1'b0, 31'b1111}; // load/store page fault, 13/15
+                    exception_handle_flag_cpu <= 1'b1;
+                    state <= STAGE_EXCEPTION_HANDLE;
+                end
             end
         end
         STAGE_MEM_PAGE_3_FINISH: begin

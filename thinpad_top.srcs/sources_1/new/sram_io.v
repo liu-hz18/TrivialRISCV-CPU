@@ -31,7 +31,7 @@ localparam STATE_DONE         = 3'b101;
 reg[2:0] state; //3bit
 assign done = (state == STATE_DONE);
 
-always @(posedge clk or posedge rst) begin
+always @(posedge clk) begin
     if (rst) begin
         ram_ce_n <= 1'b1;
         ram_oe_n <= 1'b1;
@@ -46,11 +46,27 @@ always @(posedge clk or posedge rst) begin
             STATE_IDLE: begin
                 if(~oen) begin
                     ram_addr <= address[21:2];
-                    state <= STATE_START_READ;
+                    //state <= STATE_START_READ;
+                    ram_ce_n <= 1'b0;
+                    ram_oe_n <= 1'b0;
+                    if (byte_en) begin
+                        ram_be_n <= ~(4'b0001 << (address & 32'h00000003));
+                    end else begin
+                        ram_be_n <= 4'b0000;
+                    end
+                    state <= STATE_FINISH_READ;
                 end
                 else if (~wen) begin
                     ram_addr <= address[21:2];
-                    state <= STATE_START_WRITE;
+                    //state <= STATE_START_WRITE;
+                    ram_ce_n <= 1'b0;
+                    ram_we_n <= 1'b0;
+                    if (byte_en) begin
+                        ram_be_n <= ~(4'b0001 << (address & 32'h00000003));;
+                    end else begin
+                        ram_be_n <= 4'b0000;
+                    end
+                    state <= STATE_FINISH_WRITE;
                 end else begin
                     ram_addr <= `ZERO_RAM_ADDR;
                 end

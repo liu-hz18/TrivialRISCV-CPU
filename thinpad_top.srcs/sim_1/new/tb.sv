@@ -317,6 +317,12 @@ initial begin
     cpld.pc_send_byte(read_addr[31:24]);
     #1000000;
     
+    reset_btn = 1;
+    #100;
+    reset_btn = 0;
+    // 模拟PC通过串口发�?�字�?
+    //#1000;//1000=1000ns=1us
+    #1000;
 end
 
 // 待测试用户设计

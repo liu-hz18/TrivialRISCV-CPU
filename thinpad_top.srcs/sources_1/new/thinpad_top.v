@@ -88,7 +88,7 @@ pll_example clock_gen(
   .clk_in1(clk_50M),  // 外部时钟输入
   // Clock out ports
   .clk_out1(clk_80M), // 时钟输出1，频率在IP配置界面中设置
-  .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
+  //.clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
   // Status and control signals
   .reset(reset_btn), // PLL复位输入
   .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
@@ -111,6 +111,7 @@ wire rst = reset_btn;
 // CPU内的PC模块（PC没有独立出来）
 wire[`RegBus] pc;
 wire[`RegBus] pc_now;
+assign leds = pc;
 
 // 连接CPU和ID模块
 wire[`InstBus] inst;

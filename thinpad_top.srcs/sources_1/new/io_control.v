@@ -166,9 +166,15 @@ always @(posedge clk or posedge rst) begin
             STATE_IDLE: begin
                 if(~oen) begin //读数据
                     if (ram_or_uart) begin // 读RAM
-                        state <= STATE_START_MEM_READ;
+                        //state <= STATE_START_MEM_READ;
+                        data_z <= 1'b1;
+                        oe_sram_n <= 1'b0;
+                        state <= STATE_FINISH_MEM_READ;
                     end else if (address == 32'h1000_0000) begin
-                        state <= STATE_START_UART_READ;
+                        //state <= STATE_START_UART_READ;
+                        data_z <= 1'b1;
+                        oe_uart_n <= 1'b0;
+                        state <= STATE_FINISH_UART_READ;
                     end else if (address == 32'h1000_0005) begin // 读串口状态位
                         //data_out <= {24'h00_0000, 2'b00, 1'b1, 4'b0000, 1'b1};
                         data_out <= {24'h00_0000, 2'b00, uart_tbre&uart_tsre, 4'b0000, uart_dataready};
@@ -180,9 +186,21 @@ always @(posedge clk or posedge rst) begin
                 end
                 else if (~wen) begin //写数据
                     if (ram_or_uart) begin//写RAM
-                        state <= STATE_START_MEM_WRITE;
+                        //state <= STATE_START_MEM_WRITE;
+                        data_z <= 1'b0;        // 作为发送方，base_ram_data置为要输入的数据
+                        we_sram_n <= 1'b0; //打开写内存
+                        if (byte_en) begin
+                            data_to_reg <= {24'h00_0000, data_in[7:0]} << ((address & 32'h0000_0003) << 3);
+                        end else begin
+                            data_to_reg <= data_in;
+                        end
+                        state <= STATE_FINISH_MEM_WRITE;
                     end else if (address == 32'h1000_0000) begin
-                        state <= STATE_START_UART_WRITE;
+                        //state <= STATE_START_UART_WRITE;
+                        data_z <= 1'b0;        // 作为发送方，base_ram_data置为要输入的数据
+                        we_uart_n <= 1'b0;
+                        data_to_reg <= data_in;
+                        state <= STATE_FINISH_UART_WRITE;
                     end else begin
                         // 非法地址 或 不允许写串口状态位
                         state <= STATE_DONE;

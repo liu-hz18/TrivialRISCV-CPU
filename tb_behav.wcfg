@@ -11,15 +11,15 @@
       </db_ref>
    </db_ref_list>
    <zoom_setting>
-      <ZoomStartTime time="0fs"></ZoomStartTime>
-      <ZoomEndTime time="341020781fs"></ZoomEndTime>
-      <Cursor1Time time="1001000000fs"></Cursor1Time>
+      <ZoomStartTime time="2200650fs"></ZoomStartTime>
+      <ZoomEndTime time="5382651fs"></ZoomEndTime>
+      <Cursor1Time time="3600650fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
       <NameColumnWidth column_width="175"></NameColumnWidth>
-      <ValueColumnWidth column_width="105"></ValueColumnWidth>
+      <ValueColumnWidth column_width="100"></ValueColumnWidth>
    </column_width_setting>
-   <WVObjectSize size="70" />
+   <WVObjectSize size="57" />
    <wvobject fp_name="/tb/clk_50M" type="logic">
       <obj_property name="ElementShortName">clk_50M</obj_property>
       <obj_property name="ObjectShortName">clk_50M</obj_property>
@@ -43,26 +43,6 @@
    <wvobject fp_name="/tb/reset_btn" type="logic">
       <obj_property name="ElementShortName">reset_btn</obj_property>
       <obj_property name="ObjectShortName">reset_btn</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/touch_btn" type="array">
-      <obj_property name="ElementShortName">touch_btn[3:0]</obj_property>
-      <obj_property name="ObjectShortName">touch_btn[3:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/dip_sw" type="array">
-      <obj_property name="ElementShortName">dip_sw[31:0]</obj_property>
-      <obj_property name="ObjectShortName">dip_sw[31:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/leds" type="array">
-      <obj_property name="ElementShortName">leds[15:0]</obj_property>
-      <obj_property name="ObjectShortName">leds[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/dpy0" type="array">
-      <obj_property name="ElementShortName">dpy0[7:0]</obj_property>
-      <obj_property name="ObjectShortName">dpy0[7:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/dpy1" type="array">
-      <obj_property name="ElementShortName">dpy1[7:0]</obj_property>
-      <obj_property name="ObjectShortName">dpy1[7:0]</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/txd" type="logic">
       <obj_property name="ElementShortName">txd</obj_property>
@@ -119,38 +99,6 @@
    <wvobject fp_name="/tb/ext_ram_we_n" type="logic">
       <obj_property name="ElementShortName">ext_ram_we_n</obj_property>
       <obj_property name="ObjectShortName">ext_ram_we_n</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_a" type="array">
-      <obj_property name="ElementShortName">flash_a[22:0]</obj_property>
-      <obj_property name="ObjectShortName">flash_a[22:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_d" type="array">
-      <obj_property name="ElementShortName">flash_d[15:0]</obj_property>
-      <obj_property name="ObjectShortName">flash_d[15:0]</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_rp_n" type="logic">
-      <obj_property name="ElementShortName">flash_rp_n</obj_property>
-      <obj_property name="ObjectShortName">flash_rp_n</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_vpen" type="logic">
-      <obj_property name="ElementShortName">flash_vpen</obj_property>
-      <obj_property name="ObjectShortName">flash_vpen</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_ce_n" type="logic">
-      <obj_property name="ElementShortName">flash_ce_n</obj_property>
-      <obj_property name="ObjectShortName">flash_ce_n</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_oe_n" type="logic">
-      <obj_property name="ElementShortName">flash_oe_n</obj_property>
-      <obj_property name="ObjectShortName">flash_oe_n</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_we_n" type="logic">
-      <obj_property name="ElementShortName">flash_we_n</obj_property>
-      <obj_property name="ObjectShortName">flash_we_n</obj_property>
-   </wvobject>
-   <wvobject fp_name="/tb/flash_byte_n" type="logic">
-      <obj_property name="ElementShortName">flash_byte_n</obj_property>
-      <obj_property name="ObjectShortName">flash_byte_n</obj_property>
    </wvobject>
    <wvobject fp_name="/tb/uart_rdn" type="logic">
       <obj_property name="ElementShortName">uart_rdn</obj_property>

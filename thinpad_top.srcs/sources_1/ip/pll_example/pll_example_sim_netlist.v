@@ -1,10 +1,10 @@
 // Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2019.2 (win64) Build 2708876 Wed Nov  6 21:40:23 MST 2019
-// Date        : Thu Nov 12 23:48:32 2020
-// Host        : DESKTOP-3R1T91J running 64-bit major release  (build 9200)
+// Date        : Mon Nov 23 15:54:00 2020
+// Host        : lhz running 64-bit major release  (build 9200)
 // Command     : write_verilog -force -mode funcsim
-//               C:/Users/10765/Desktop/compose_hw/cod20-grp38/thinpad_top.srcs/sources_1/ip/pll_example/pll_example_sim_netlist.v
+//               D:/cod20-grp38/thinpad_top.srcs/sources_1/ip/pll_example/pll_example_sim_netlist.v
 // Design      : pll_example
 // Purpose     : This verilog netlist is a functional simulation representation of the design and should not be modified
 //               or synthesized. This netlist cannot be used for SDF annotated simulation.
@@ -15,26 +15,22 @@
 (* NotValidForBitStream *)
 module pll_example
    (clk_out1,
-    clk_out2,
     reset,
     locked,
     clk_in1);
   output clk_out1;
-  output clk_out2;
   input reset;
   output locked;
   input clk_in1;
 
   (* IBUF_LOW_PWR *) wire clk_in1;
   wire clk_out1;
-  wire clk_out2;
   wire locked;
   wire reset;
 
   pll_example_pll_example_clk_wiz inst
        (.clk_in1(clk_in1),
         .clk_out1(clk_out1),
-        .clk_out2(clk_out2),
         .locked(locked),
         .reset(reset));
 endmodule
@@ -42,12 +38,10 @@ endmodule
 (* ORIG_REF_NAME = "pll_example_clk_wiz" *) 
 module pll_example_pll_example_clk_wiz
    (clk_out1,
-    clk_out2,
     reset,
     locked,
     clk_in1);
   output clk_out1;
-  output clk_out2;
   input reset;
   output locked;
   input clk_in1;
@@ -56,8 +50,6 @@ module pll_example_pll_example_clk_wiz
   wire clk_in1_pll_example;
   wire clk_out1;
   wire clk_out1_pll_example;
-  wire clk_out2;
-  wire clk_out2_pll_example;
   wire clkfbout_buf_pll_example;
   wire clkfbout_pll_example;
   wire locked;
@@ -66,6 +58,7 @@ module pll_example_pll_example_clk_wiz
   wire NLW_mmcm_adv_inst_CLKFBSTOPPED_UNCONNECTED;
   wire NLW_mmcm_adv_inst_CLKINSTOPPED_UNCONNECTED;
   wire NLW_mmcm_adv_inst_CLKOUT0B_UNCONNECTED;
+  wire NLW_mmcm_adv_inst_CLKOUT1_UNCONNECTED;
   wire NLW_mmcm_adv_inst_CLKOUT1B_UNCONNECTED;
   wire NLW_mmcm_adv_inst_CLKOUT2_UNCONNECTED;
   wire NLW_mmcm_adv_inst_CLKOUT2B_UNCONNECTED;
@@ -96,22 +89,18 @@ module pll_example_pll_example_clk_wiz
        (.I(clk_out1_pll_example),
         .O(clk_out1));
   (* BOX_TYPE = "PRIMITIVE" *) 
-  BUFG clkout2_buf
-       (.I(clk_out2_pll_example),
-        .O(clk_out2));
-  (* BOX_TYPE = "PRIMITIVE" *) 
   MMCME2_ADV #(
     .BANDWIDTH("OPTIMIZED"),
-    .CLKFBOUT_MULT_F(20.000000),
+    .CLKFBOUT_MULT_F(39.875000),
     .CLKFBOUT_PHASE(0.000000),
     .CLKFBOUT_USE_FINE_PS("FALSE"),
     .CLKIN1_PERIOD(20.000000),
     .CLKIN2_PERIOD(0.000000),
-    .CLKOUT0_DIVIDE_F(100.000000),
+    .CLKOUT0_DIVIDE_F(18.125000),
     .CLKOUT0_DUTY_CYCLE(0.500000),
     .CLKOUT0_PHASE(0.000000),
     .CLKOUT0_USE_FINE_PS("FALSE"),
-    .CLKOUT1_DIVIDE(50),
+    .CLKOUT1_DIVIDE(1),
     .CLKOUT1_DUTY_CYCLE(0.500000),
     .CLKOUT1_PHASE(0.000000),
     .CLKOUT1_USE_FINE_PS("FALSE"),
@@ -137,7 +126,7 @@ module pll_example_pll_example_clk_wiz
     .CLKOUT6_PHASE(0.000000),
     .CLKOUT6_USE_FINE_PS("FALSE"),
     .COMPENSATION("ZHOLD"),
-    .DIVCLK_DIVIDE(1),
+    .DIVCLK_DIVIDE(2),
     .IS_CLKINSEL_INVERTED(1'b0),
     .IS_PSEN_INVERTED(1'b0),
     .IS_PSINCDEC_INVERTED(1'b0),
@@ -160,7 +149,7 @@ module pll_example_pll_example_clk_wiz
         .CLKINSTOPPED(NLW_mmcm_adv_inst_CLKINSTOPPED_UNCONNECTED),
         .CLKOUT0(clk_out1_pll_example),
         .CLKOUT0B(NLW_mmcm_adv_inst_CLKOUT0B_UNCONNECTED),
-        .CLKOUT1(clk_out2_pll_example),
+        .CLKOUT1(NLW_mmcm_adv_inst_CLKOUT1_UNCONNECTED),
         .CLKOUT1B(NLW_mmcm_adv_inst_CLKOUT1B_UNCONNECTED),
         .CLKOUT2(NLW_mmcm_adv_inst_CLKOUT2_UNCONNECTED),
         .CLKOUT2B(NLW_mmcm_adv_inst_CLKOUT2B_UNCONNECTED),
