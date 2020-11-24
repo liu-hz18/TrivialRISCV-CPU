@@ -82,25 +82,25 @@ module thinpad_top(
 );
 
 // PLL分频示例
-wire locked, clk_80M, clk_20M;
-pll_example clock_gen(
-  // Clock in ports
-  .clk_in1(clk_50M),  // 外部时钟输入
-  // Clock out ports
-  .clk_out1(clk_80M), // 时钟输出1，频率在IP配置界面中设置
-  //.clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
-  // Status and control signals
-  .reset(reset_btn), // PLL复位输入
-  .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
-                     // 后级电路复位信号应当由它生成（见下）
-);
+// wire locked, clk_80M, clk_20M;
+// pll_example clock_gen(
+//   // Clock in ports
+//   .clk_in1(clk_50M),  // 外部时钟输入
+//   // Clock out ports
+//   .clk_out1(clk_80M), // 时钟输出1，频率在IP配置界面中设置
+//   //.clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
+//   // Status and control signals
+//   .reset(reset_btn), // PLL复位输入
+//   .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
+//                      // 后级电路复位信号应当由它生成（见下）
+// );
 
-reg reset_of_clk80M;
-// 异步复位，同步释放，将locked信号转为后级电路的复位 reset_of_clk80M
-always@(posedge clk_80M or negedge locked) begin
-    if(~locked) reset_of_clk80M <= 1'b1;
-    else        reset_of_clk80M <= 1'b0;
-end
+// reg reset_of_clk80M;
+// // 异步复位，同步释放，将locked信号转为后级电路的复位 reset_of_clk80M
+// always@(posedge clk_80M or negedge locked) begin
+//     if(~locked) reset_of_clk80M <= 1'b1;
+//     else        reset_of_clk80M <= 1'b0;
+// end
 
 // 选择时钟和复位信号
 // wire clk = clk_80M;

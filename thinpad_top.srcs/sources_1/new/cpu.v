@@ -97,17 +97,17 @@ assign write_reg_buf = (state == STAGE_WB) ? write_reg : 1'b0;
 assign csr_write_en = (state == STAGE_WB) ? (csr_write_en_id_cpu | csr_write_en_cpu) : 7'b000_0000;
 
 // 地址相关异常判断
-wire address_misalign = is_mem_page ? ((ex_result_i > 32'h002f_ffff && ex_result_i < 32'h7fc1_0000) || (ex_result_i > 32'h8000_0fff && ex_result_i < 32'h8010_0000) || (ex_result_i > 32'h8010_0fff)) : (ex_result_i < 32'h1000_0000 || (ex_result_i > 32'h1000_0005 && ex_result_i < 32'h8000_0000) || ex_result_i > 32'h807F_FFFF);
-wire access_fault = ex_result_i[1:0] != 2'b00;
+wire access_fault = is_mem_page ? ((ex_result_i > 32'h002f_ffff && ex_result_i < 32'h7fc1_0000) | (ex_result_i > 32'h8000_0fff && ex_result_i < 32'h8010_0000) | (ex_result_i > 32'h8010_0fff)) : (ex_result_i < 32'h1000_0000 || (ex_result_i > 32'h1000_0005 && ex_result_i < 32'h8000_0000) || ex_result_i > 32'h807F_FFFF);
+wire address_misalign = (ex_result_i[1:0] != 2'b00);
 
-wire if_access_fault = is_if_page ? ((pc > 32'h002f_ffff && pc < 32'h7fc1_0000) || (pc > 32'h8000_0fff && pc < 32'h8010_0000) || (pc > 32'h8010_0fff)) : (pc < 32'h8000_0000 || pc > 32'h807F_FFFF);
-wire if_address_misalign = pc[1:0] != 2'b00;
+wire if_access_fault = is_if_page ? ((pc > 32'h002f_ffff && pc < 32'h8000_0000) | (pc > 32'h8000_0fff && pc < 32'h8010_0000) | (pc > 32'h8010_0fff)) : (pc < 32'h8000_0000 | pc > 32'h807F_FFFF);
+wire if_address_misalign = (pc[1:0] != 2'b00);
 
-wire load_access_fault = mem_read && address_misalign;
-wire load_address_misalign = mem_read && access_fault && (~mem_byte_en);
+wire load_access_fault = mem_read & access_fault;
+wire load_address_misalign = mem_read & address_misalign & (~mem_byte_en);
 
-wire store_access_fault = mem_write && address_misalign;
-wire store_address_misalign = mem_write && access_fault && (~mem_byte_en);
+wire store_access_fault = mem_write && access_fault;
+wire store_address_misalign = mem_write & address_misalign & (~mem_byte_en);
 
 reg exception_handle_flag_cpu;
 
@@ -146,20 +146,20 @@ always @(posedge clk) begin
     end else begin
         case (state)
         STAGE_IDLE: begin
-            if (if_access_fault == 1'b1) begin // 地址越界
+            if (if_access_fault) begin // 地址越界
                 csr_write_en_cpu[2] <= 1'b1;
                 csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0001}; // 取指access fault, 1
-                state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
-            end else if (if_address_misalign == 1'b1) begin // 地址不对齐
+                state <= STAGE_EXCEPTION_HANDLE;
+            end else if (pc[1:0] != 2'b00) begin // 地址不对齐
                 csr_write_en_cpu[2] <= 1'b1;
                 csr_write_en_cpu[6] <= 1'b1;
                 mtval_data_o <= pc;
                 mcause_data_o <= {1'b0, 31'b0000}; // 取指address misalign, 0
-                state <= STAGE_EXCEPTION_HANDLE;
                 exception_handle_flag_cpu <= 1'b1;
+                state <= STAGE_EXCEPTION_HANDLE;
             end else if (is_if_page == 1'b1) begin // U-mode, use paging
                 // tlb hit 判断
                 if (tlb_vpn_prefix_pc_select[36:24] == pc_tlb_vpn_prefix) begin // tlb hit
@@ -265,7 +265,7 @@ always @(posedge clk) begin
             if (exception_recover_flag_i == 1'b1) begin // mret
                 pc <= mepc_data_i;
                 mode_cpu <= mstatus_data_i[12:11]; // U-mode
-            end else begin // ebreak, ecall
+            end else begin // ebreak, ecall, or其他异常
                 mepc_data_o <= pc;
                 pc <= mtvec_data_i;
                 mstatus_data_o <= {mstatus_data_i[31:13], mode_cpu, mstatus_data_i[10:0]}; // M-mode
@@ -417,6 +417,7 @@ always @(posedge clk) begin
         end
         // 写回阶段完成通用寄存器和异常寄存器的写回
         STAGE_WB: begin
+            {io_oen, io_wen, io_byte_en} <= 3'b110;
             if (branch_flag_i == 1'b1 && exception_handle_flag_i == 1'b0) begin // 更新PC
                 pc <= ex_result_i;
             end else if (exception_handle_flag_i == 1'b0 && exception_handle_flag_cpu == 1'b0) begin

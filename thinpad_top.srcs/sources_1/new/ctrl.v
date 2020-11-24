@@ -300,16 +300,32 @@ always @(*) begin
             case(inst_func3)
             FUNC3_BEQ: begin
                 if (rs1_data_o == rs2_data_o) begin
-                    branch_flag_o = 1'b1;
-                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
+                    if (inst_i[8] == 1'b1) begin
+                        exception_handle_flag = 1'b1;
+                        csr_write_en[6] = 1'b1;
+                        csr_write_en[2] = 1'b1;
+                        mtval_data_o = inst_i;
+                        mcause_data_o = {1'b0, 31'b0000}; // 地址不对齐
+                    end else begin
+                        branch_flag_o = 1'b1;
+                        imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
+                    end
                 end else begin
                     branch_flag_o = 1'b0;
                 end
             end
             FUNC3_BNE: begin
                 if (rs1_data_o != rs2_data_o) begin
-                    branch_flag_o = 1'b1;
-                    imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
+                    if (inst_i[8] == 1'b1) begin
+                        exception_handle_flag = 1'b1;
+                        csr_write_en[6] = 1'b1;
+                        csr_write_en[2] = 1'b1;
+                        mtval_data_o = inst_i;
+                        mcause_data_o = {1'b0, 31'b0000}; // 地址不对齐
+                    end else begin
+                        branch_flag_o = 1'b1;
+                        imm_o = {{19{inst_i[31]}}, inst_i[31], inst_i[7], inst_i[30:25], inst_i[11:8], 1'b0};  // 符号扩展??32??
+                    end
                 end else begin
                     branch_flag_o = 1'b0;
                 end
