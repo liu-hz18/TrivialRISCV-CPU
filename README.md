@@ -1,7 +1,5 @@
-Thinpad 模板工程
+TrivialRISCV-CPU
 ---------------
+### Course Project of 'Principles of Computer Organization' in the Department of Computer Science, Tsinghua University
 
-工程包含示例代码和所有引脚约束，可以直接编译。
-
-代码中包含中文注释，编码为utf-8，在Windows版Vivado下可能出现乱码问题。  
-请用别的代码编辑器打开文件，并将编码改为GBK。
+### Five-cycle RISC-V processor (Soc) that supports exception handling and virtual memory.
